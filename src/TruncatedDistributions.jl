@@ -50,6 +50,7 @@ export
     moment_grad_μ,
     moment_grad_U,
     vector_grad_true_loss,
+    vector_fg_true_loss,
     loss_based_fit,
     truncateDynamicFit,
     moment_loss,

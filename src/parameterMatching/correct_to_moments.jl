@@ -21,8 +21,10 @@ function correct_to_moments_with_optim(     d::RecursiveMomentsBoxTruncatedMvNor
     return RecursiveMomentsBoxTruncatedMvNormal(μ_optim, PDMat(Σ_optim),d.region.a, d.region.b)
 end
 
-# LBFGS with the explicit *true-loss* gradient vector_grad_true_loss. This is
-# the matched (f, ∇f) pair for the optimization target moment_loss(d, μ̂, Σ̂).
+# LBFGS with the explicit *true-loss* gradient. Uses Optim's only_fg!
+# interface so a single Kan–Robotti recursion serves both the loss and
+# the gradient per iteration — half the recursion work of the previous
+# implementation that called f and g! separately.
 function correct_to_moments_with_optim_explicit_grad(
                                             d::RecursiveMomentsBoxTruncatedMvNormal,
                                             μ̂::AbstractVector{Float64},
@@ -30,10 +32,9 @@ function correct_to_moments_with_optim_explicit_grad(
     a, b   = d.region.a, d.region.b
     μ̂v     = collect(μ̂)
     Σ̂m     = Matrix(Σ̂)
-    f(p)     =  vector_moment_loss(p, a, b, μ̂v, Σ̂m)
-    g!(g, p) = (g .= vector_grad_true_loss(p, a, b, μ̂v, Σ̂m))
+    fg!(F, G, p) = vector_fg_true_loss(F, G, p, a, b, μ̂v, Σ̂m)
     p0 = make_param_vec_from_μ_Σ(μ̂v, Σ̂m)
-    res = optimize(f, g!, p0, LBFGS(),
+    res = optimize(Optim.only_fg!(fg!), p0, LBFGS(),
                    Optim.Options(show_trace = false,
                                  iterations = 50,
                                  time_limit = 30.0,

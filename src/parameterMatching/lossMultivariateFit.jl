@@ -64,7 +64,27 @@ function loss_based_fit(μ̂::Vector{Float64}, Σ̂::Matrix{Float64}, a::Vector{
 end
 
 function moment_loss(dist::RecursiveMomentsBoxTruncatedMvNormal, μ̂::AbstractVector{Float64}, Σ̂::AbstractMatrix{Float64})
-    return 0.5*(norm(mean(dist) - μ̂)^2 + norm(cov(dist) - Σ̂)^2)
+    # Use the cached Kan–Robotti primitive moments directly. Calling
+    # mean(dist) / cov(dist) instead would re-integrate the dist via
+    # HCubature on x f(x) and x x^T f(x) — bypassing the recursion that's
+    # already populated in dist.state — and a single moment_loss call
+    # would then dominate the cost of the full f + ∇f pair (~96% of
+    # benchmark time, ~44M allocations and 1.4 GiB per call at n=3).
+    n  = length(dist)
+    m0 = raw_moment_from_indices(dist, Int[])
+    # Guard against the LBFGS line search wandering into a region where
+    # the truncation probability m^{(0)} → 0; μA = m^{(1)}/m^{(0)} then
+    # overflows and the optimizer would freeze at L = Inf. Return a large
+    # finite penalty so the line search backs off instead.
+    if !isfinite(m0) || m0 < eps(Float64)
+        return prevfloat(Inf) / 4
+    end
+    m1 = [raw_moment_from_indices(dist, [i])    for i in 1:n]
+    m2 = [raw_moment_from_indices(dist, [i, j]) for i in 1:n, j in 1:n]
+    μA = m1 ./ m0
+    ΣA = m2 ./ m0 .- μA * μA'
+    L = 0.5 * (sum(abs2, μA .- μ̂) + sum(abs2, ΣA .- Σ̂))
+    return isfinite(L) ? L : prevfloat(Inf) / 4
 end
 
 function approximate_moment_loss(d::RecursiveMomentsBoxTruncatedMvNormal,

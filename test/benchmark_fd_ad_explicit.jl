@@ -52,15 +52,16 @@ end
 function truncated_moments_hcub(μ::AbstractVector{T}, Σ::AbstractMatrix{T},
                                 a::AbstractVector{Float64},
                                 b::AbstractVector{Float64};
-                                rtol = 1e-6) where {T}
+                                rtol = 1e-5,
+                                maxevals = 100_000) where {T}
     n      = length(μ)
     Σinv   = inv(Σ)
     detΣ   = det(Σ)
     norm_const = T((2π)^(-n / 2)) / sqrt(detΣ)
     dens(x) = norm_const * exp(T(-0.5) * dot(x .- μ, Σinv * (x .- μ)))
-    m0      = hcubature(dens, a, b; rtol = rtol)[1]
-    m1      = [hcubature(x -> x[i] * dens(x), a, b; rtol = rtol)[1] for i in 1:n]
-    m2      = [hcubature(x -> x[i] * x[j] * dens(x), a, b; rtol = rtol)[1] for i in 1:n, j in 1:n]
+    m0      = hcubature(dens, a, b; rtol = rtol, maxevals = maxevals)[1]
+    m1      = [hcubature(x -> x[i] * dens(x), a, b; rtol = rtol, maxevals = maxevals)[1] for i in 1:n]
+    m2      = [hcubature(x -> x[i] * x[j] * dens(x), a, b; rtol = rtol, maxevals = maxevals)[1] for i in 1:n, j in 1:n]
     return m0, m1, m2
 end
 
@@ -106,12 +107,16 @@ function fit_explicit_hcub(p0, a, b, μ̂, Σ̂)
 end
 
 function fit_explicit_kr(p0, a, b, μ̂, Σ̂)
-    # Loss + gradient both via Kan–Robotti recursion (the package's
-    # fast path). This is what a real deployment of the explicit
-    # gradient looks like.
+    # Separate f and g! calls — the doubled-recursion path.
     f(p)       = vector_moment_loss(p, a, b, μ̂, Matrix(Σ̂))
     g!(g, p)   = (g .= vector_grad_true_loss(p, a, b, μ̂, Matrix(Σ̂)))
     optimize(f, g!, p0, LBFGS(), COMMON_OPTS)
+end
+
+function fit_explicit_kr_fg(p0, a, b, μ̂, Σ̂)
+    # Combined fg! — one Kan–Robotti recursion per LBFGS iteration.
+    fg!(F, G, p) = vector_fg_true_loss(F, G, p, a, b, μ̂, Matrix(Σ̂))
+    optimize(Optim.only_fg!(fg!), p0, LBFGS(), COMMON_OPTS)
 end
 
 # --------------------------------------------------------------------------
@@ -171,19 +176,32 @@ function run_one(label, ne)
     flush(stdout)
 
     # Explicit via Kan-Robotti (uses the full a,b including ∞)
+    a_kr = collect(d.region.a); b_kr = collect(d.region.b)
     try
-        a_kr = collect(d.region.a); b_kr = collect(d.region.b)
         t = @elapsed (r = fit_explicit_kr(p0, a_kr, b_kr, μ̂, Σ̂))
-        @printf("EXP-KR %.2fs(%.2e)", t, r.minimum)
+        @printf("EXP-KR %.2fs(%.2e) ", t, r.minimum)
     catch e
-        print("EXP-KR ERR")
+        print("EXP-KR ERR ")
+    end
+    flush(stdout)
+
+    # Explicit Kan-Robotti with fg! fast path (one recursion per iter).
+    try
+        t = @elapsed (r = fit_explicit_kr_fg(p0, a_kr, b_kr, μ̂, Σ̂))
+        @printf("EXP-KR-fg %.2fs(%.2e)", t, r.minimum)
+    catch e
+        print("EXP-KR-fg ERR")
     end
     println()
 end
 
-println("# n=2 Gaussian benchmark: LBFGS with FD vs AD vs explicit-gradient")
-println("# (all wall-clock includes JIT compilation on first call to that mode)")
-for i in 1:4
-    ne = get_example(n = 2, index = i)
-    run_one("n=2 idx=$i", ne)
+if abspath(PROGRAM_FILE) == @__FILE__
+    println("# n=2,3,4 Gaussian benchmark: LBFGS with FD vs AD vs explicit-gradient")
+    println("# (all wall-clock includes JIT compilation on first call to that mode)")
+    for n in [2, 3, 4]
+        for i in 1:get_num_examples(n)
+            ne = get_example(n = n, index = i)
+            run_one("n=$n idx=$i", ne)
+        end
+    end
 end

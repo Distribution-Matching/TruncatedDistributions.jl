@@ -133,3 +133,30 @@ function vector_grad_true_loss(p::Vector{Float64}, a, b,
     g_μ, g_U = grad_true_loss(d, μ̂, Σ̂; U = U)
     return make_param_vec_from_μ_U(g_μ, g_U)
 end
+
+# Combined-evaluation entry point for Optim's only_fg! / fg! interface.
+# Returns the loss L(p) when F is not nothing, and writes ∇L(p) into G when
+# G is not nothing. Inside an LBFGS iteration the same dist is reused for
+# both the loss and the gradient, so a single Kan–Robotti recursion serves
+# both — avoiding the doubled work of separate f and g! calls.
+function vector_fg_true_loss(F, G, p::Vector{Float64}, a, b,
+                             μ̂::Vector{Float64}, Σ̂::Matrix{Float64})
+    n = n_from_param_size(length(p))
+    μ, Σ = make_μ_Σ_from_param_vec(p)
+    inds_upper = [CartesianIndex(i, j) for i = 1:n for j = i:n]
+    U = zeros(n, n); U[inds_upper] = p[(n+1):end]
+    U = Matrix(UpperTriangular(U))
+
+    Σsym = 0.5 .* (Σ .+ Σ')
+    Σsym .+= eps(Float64) * (tr(Σsym) + 1.0) * Matrix{Float64}(I, size(Σsym))
+    d = RecursiveMomentsBoxTruncatedMvNormal(μ, PDMat(Σsym), a, b; max_moment_levels = 4)
+
+    if G !== nothing
+        g_μ, g_U = grad_true_loss(d, μ̂, Σ̂; U = U)
+        G .= make_param_vec_from_μ_U(g_μ, g_U)
+    end
+    if F !== nothing
+        return moment_loss(d, μ̂, Σ̂)
+    end
+    return nothing
+end
