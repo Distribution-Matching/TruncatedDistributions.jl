@@ -80,36 +80,45 @@ function approximate_moment_loss(d::RecursiveMomentsBoxTruncatedMvNormal,
     return (term1 + term2)/2
 end
 
-function vector_moment_loss(param_vec::Vector{Float64}, 
+function vector_moment_loss(param_vec::Vector{Float64},
                             a,
-                            b, 
-                            μ̂::AbstractVector{Float64}, 
+                            b,
+                            μ̂::AbstractVector{Float64},
                             Σ̂::AbstractMatrix{Float64})
     μ, Σ = make_μ_Σ_from_param_vec(param_vec)
-    dist = RecursiveMomentsBoxTruncatedMvNormal(μ, PDMat(Σ), a, b)
+    # Σ comes from U^{-1} U^{-T}; round-off during LBFGS line search can make
+    # it slightly non-PD. Symmetrize and add a tiny jitter so the Cholesky
+    # inside PDMat does not throw and abort the optimization.
+    Σsym = 0.5 .* (Σ .+ Σ')
+    Σsym .+= eps(Float64) * (tr(Σsym) + 1.0) * Matrix{Float64}(I, size(Σsym))
+    dist = RecursiveMomentsBoxTruncatedMvNormal(μ, PDMat(Σsym), a, b)
     return moment_loss(dist, μ̂, Σ̂)
 end
 
 
-function approximate_vector_moment_loss(param_vec::Vector{Float64}, 
+function approximate_vector_moment_loss(param_vec::Vector{Float64},
                             a,
                             b,
-                            μA::Vector{Float64}, 
-                            μ̂::AbstractVector{Float64}, 
+                            μA::Vector{Float64},
+                            μ̂::AbstractVector{Float64},
                             Σ̂::AbstractMatrix{Float64})
     μ, Σ = make_μ_Σ_from_param_vec(param_vec)
-    dist = RecursiveMomentsBoxTruncatedMvNormal(μ, PDMat(Σ), a, b)
+    Σsym = 0.5 .* (Σ .+ Σ')
+    Σsym .+= eps(Float64) * (tr(Σsym) + 1.0) * Matrix{Float64}(I, size(Σsym))
+    dist = RecursiveMomentsBoxTruncatedMvNormal(μ, PDMat(Σsym), a, b)
     return approximate_moment_loss(dist, μA, μ̂, Σ̂)
 end
 
 function vector_gradient(   param_vec::Vector{Float64},
                             a,
                             b,
-                            μA::AbstractVector{Float64}, 
-                            μ̂::AbstractVector{Float64}, 
+                            μA::AbstractVector{Float64},
+                            μ̂::AbstractVector{Float64},
                             Σ̂::AbstractMatrix{Float64})
     μ, Σ = make_μ_Σ_from_param_vec(param_vec)
-    dist = RecursiveMomentsBoxTruncatedMvNormal(μ, PDMat(Σ), a, b; max_moment_levels = 4)
+    Σsym = 0.5 .* (Σ .+ Σ')
+    Σsym .+= eps(Float64) * (tr(Σsym) + 1.0) * Matrix{Float64}(I, size(Σsym))
+    dist = RecursiveMomentsBoxTruncatedMvNormal(μ, PDMat(Σsym), a, b; max_moment_levels = 4)
     μ_grad = μ_gradient(dist, μA, μ̂, PDMat(Σ̂))'
     U_grad = U_gradient(dist, μA, μ̂, PDMat(Σ̂))
     make_param_vec_from_μ_U(μ_grad, U_grad)
@@ -128,7 +137,10 @@ function make_μ_Σ_from_param_vec(param_vec)
 end
 
 function make_param_vec_from_μ_Σ(μ, Σ)
-    F = cholesky(inv(Σ))
+    # inv(Σ) can have asymmetric round-off even when Σ is symmetric PD;
+    # cholesky requires exact symmetry. Symmetrize before factorizing.
+    Σi = inv(Σ)
+    F = cholesky(0.5 .* (Σi .+ Σi'))
     U = F.U
     n = size(U)[1]
     inds = [CartesianIndex(i,j) for i=1:n for j=i:n]

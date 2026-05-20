@@ -62,4 +62,6 @@ import TruncatedDistributions: hcubature_inf
         @test cov(d)[2,2]  ≈  0.6062505              atol = 1e-6
     end
 
+    include("test_gradients.jl")
+
 end

@@ -17,11 +17,16 @@ function μ_gradient(    d::RecursiveMomentsBoxTruncatedMvNormal,
         + m0*(μA[ii(k)]*μA[jj(k)] - Σ̂[ii(k),jj(k)])
         )
         for k in 1:n^2]
+    # Paper eq (eq:I-mu-4): 8 terms. Earlier revisions of this file were
+    # missing the m^{(1)}_{i(k)} μA_{j(k)} μ_ℓ term and the μ_ℓ factor on
+    # the closing m^{(0)} term, both restored here.
     I4 = [(
-        m([ii(k),jj(k),l]) - m([ii(k),l])*μA[jj(k)] - m([jj(k),l])*μA[ii(k)] - m([ii(k),jj(k)])*μ[l] 
-        + m([l])*(μA[ii(k)]*μA[jj(k)]-Σ̂[ii(k),jj(k)]) + m([jj(k)])*μA[ii(k)]*μ[l] 
-        - m0*(μA[ii(k)]*μA[jj(k)] - Σ̂[ii(k),jj(k)]) 
-        ) 
+        m([ii(k),jj(k),l]) - m([ii(k),l])*μA[jj(k)] - m([jj(k),l])*μA[ii(k)] - m([ii(k),jj(k)])*μ[l]
+        + m([l])*(μA[ii(k)]*μA[jj(k)]-Σ̂[ii(k),jj(k)])
+        + m([jj(k)])*μA[ii(k)]*μ[l]
+        + m([ii(k)])*μA[jj(k)]*μ[l]
+        - m0*μ[l]*(μA[ii(k)]*μA[jj(k)] - Σ̂[ii(k),jj(k)])
+        )
         for k in 1:n^2, l in 1:n]
     return (I1'*I2 + I3'*I4)*inv(Matrix(Σ)) #note it returns a row (just like the paper)
 end
@@ -79,7 +84,9 @@ function U_gradient(    d::RecursiveMomentsBoxTruncatedMvNormal,
                                     + m([s]) * Σ̂[i, j] * μ[l]
                                     - m([i]) * μA[j] * μ[s] * μ[l]
                                     + m0 * (μA[i] * μA[j] * μ[s] * μ[l] - Σ̂[i, j] * μ[s] * μ[l])) for s in k:n)
-    Ĩ4diag(k,i,j) = -iU[k,k]*(m([i,j]) -m([j])*μA[i]-m([i])*μA[j]+ m0 * (μA[i]*μA[j])- Σ̂[i, j])
+    # Paper eq (eq:I-U-4) k=ℓ case: m0 multiplies (μA_i μA_j − Σ̂_{i,j}),
+    # not only μA_i μA_j. Earlier revision had Σ̂ outside the m0 factor.
+    Ĩ4diag(k,i,j) =  iU[k,k]*(m([i,j]) -m([j])*μA[i]-m([i])*μA[j]+ m0 * (μA[i]*μA[j] - Σ̂[i, j]))
     I4(i,j) = [(if k < l
                     Ĩ4(k,l,i,j)
                     elseif k == l
@@ -107,7 +114,7 @@ function U_gradient(    d::RecursiveMomentsBoxTruncatedMvNormal,
                                     - 2 * m([i]) * μA[i] * μ[s] * μ[l]
                                     -     m([s]) * μA[i]^2 * μ[l]
                                     +     m0 * (μA[i]^2 * μ[s] * μ[l] - μ[s] * μ[l] * Σ̂[i, i])) for s in k:n)
-    Ĩ6diag(k,i) = -iU[k,k]*(m([i,i]) -2m([i])*μA[i] + m0 * (μA[i]^2- Σ̂[i, i]))
+    Ĩ6diag(k,i) =  iU[k,k]*(m([i,i]) -2m([i])*μA[i] + m0 * (μA[i]^2- Σ̂[i, i]))
     I6(i) = [(if k < l
                     Ĩ6(k,l,i)
                 elseif k == l

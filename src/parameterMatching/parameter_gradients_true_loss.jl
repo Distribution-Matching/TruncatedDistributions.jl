@@ -127,7 +127,9 @@ function vector_grad_true_loss(p::Vector{Float64}, a, b,
     U = zeros(n, n); U[inds_upper] = p[(n+1):end]
     U = Matrix(UpperTriangular(U))
 
-    d = RecursiveMomentsBoxTruncatedMvNormal(μ, PDMat(Σ), a, b; max_moment_levels = 4)
+    Σsym = 0.5 .* (Σ .+ Σ')
+    Σsym .+= eps(Float64) * (tr(Σsym) + 1.0) * Matrix{Float64}(I, size(Σsym))
+    d = RecursiveMomentsBoxTruncatedMvNormal(μ, PDMat(Σsym), a, b; max_moment_levels = 4)
     g_μ, g_U = grad_true_loss(d, μ̂, Σ̂; U = U)
     return make_param_vec_from_μ_U(g_μ, g_U)
 end
