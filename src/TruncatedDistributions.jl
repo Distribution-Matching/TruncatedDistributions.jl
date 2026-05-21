@@ -11,6 +11,8 @@ using PRIMA
 using Optim
 using Combinatorics
 using MvNormalCDF
+using Printf
+using Random
 
 import Distributions: insupport, pdf, moment
 import Base: size, length, show, rand
@@ -52,10 +54,14 @@ export
     moment_grad_U,
     vector_grad_true_loss,
     vector_fg_true_loss,
+    vector_fg_true_loss!,
+    update_distribution!,
+    outer_dist_from_state,
     hcubature_inf,
     set_kr_base_backend!,
     get_kr_base_backend,
     warm_start_diagonal,
+    block_coord_descent,
     loss_based_fit,
     truncateDynamicFit,
     moment_loss,
@@ -100,5 +106,6 @@ include("commonCompute.jl")
 include("parameterMatching/lossMultivariateFit.jl")
 include("parameterMatching/parameter_gradients_true_loss.jl")
 include("parameterMatching/warm_start.jl")
+include("parameterMatching/block_coord_descent.jl")
 
 end #module

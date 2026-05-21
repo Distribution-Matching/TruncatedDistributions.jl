@@ -75,6 +75,57 @@ mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistribut
     end
 end
 
+# In-place refresh of an existing tree state with a new (μ, Σ).
+# Topology (children_a, children_b lengths, dict keys, complement_idx, box
+# bounds) is invariant across LBFGS iterations on the same n / a / b /
+# max_moment_levels, so reusing the same state and just walking the tree to
+# rewrite the distribution-dependent data avoids the O(n!) tree
+# re-allocation in the constructor. This matters a lot at n ≥ 5: at n=6,
+# construction alone is ≥250 ms and ≥250 MB per call.
+function update_distribution!(s::BoxTruncatedMvNormalRecursiveMomentsState,
+                              μₑ::AbstractVector{Float64},
+                              Σₑ::AbstractMatrix{Float64})
+    Σpd = Σₑ isa PDMat ? Σₑ : PDMat(0.5 .* (Matrix(Σₑ) .+ Matrix(Σₑ)'))
+    s.d = MvNormal(Vector{Float64}(μₑ), Σpd)
+
+    @inbounds for j in 1:s.n
+        σj = sqrt(Σpd[j, j])
+        s.phi_a[j] = pdf(Normal(μₑ[j], σj), s.r.a[j])
+        s.phi_b[j] = pdf(Normal(μₑ[j], σj), s.r.b[j])
+    end
+
+    if s.n ≥ 2
+        Σmat = Matrix(Σpd)
+        for j in 1:s.n
+            comp = s.complement_idx[j]
+            inv_diag = 1.0 / Σmat[j, j]
+            μᵃj = μₑ[comp] .+ Σmat[comp, j] .* ((s.r.a[j] - μₑ[j]) * inv_diag)
+            μᵇj = μₑ[comp] .+ Σmat[comp, j] .* ((s.r.b[j] - μₑ[j]) * inv_diag)
+            Σ̃j = Σmat[comp, comp] .- inv_diag .* (Σmat[comp, j] * Σmat[j, comp]')
+            Σ̃j_sym = 0.5 .* (Σ̃j .+ Σ̃j')
+            update_distribution!(s.children_a[j], μᵃj, Σ̃j_sym)
+            update_distribution!(s.children_b[j], μᵇj, Σ̃j_sym)
+        end
+    end
+
+    # Invalidate cached moments.
+    for k in keys(s.rawMomentDict)
+        s.rawMomentDict[k] = NaN
+    end
+    s.rawMomentsComputed = false
+    s.tp = NaN
+    return s
+end
+
+# Build a lightweight outer `TruncatedMvDistribution` wrapper around an
+# already-refreshed state. The outer struct is immutable (and cheap — three
+# field references), so callers that hold a long-lived workspace state
+# rebuild this thin wrapper on each call. The expensive object (the state
+# tree) is reused.
+function outer_dist_from_state(state::BoxTruncatedMvNormalRecursiveMomentsState)
+    return TruncatedMvDistribution(state.d, state.r, state)
+end
+
 function init_dicts(n::Int,max_moment_levels::Int)
     function addToBaseKey(  baseKey::Vector{Int},
                             n::Int,

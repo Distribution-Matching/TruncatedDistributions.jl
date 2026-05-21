@@ -160,3 +160,31 @@ function vector_fg_true_loss(F, G, p::Vector{Float64}, a, b,
     end
     return nothing
 end
+
+# Workspace-aware variant: takes a pre-built KR-tree state and refreshes it
+# in place rather than allocating a fresh tree per call. Saves the O(n!)
+# tree-construction cost across all LBFGS iterations on the same (n, a, b).
+# The state must have been constructed with `max_moment_levels >= 4`.
+function vector_fg_true_loss!(F, G, p::Vector{Float64},
+                              state::BoxTruncatedMvNormalRecursiveMomentsState,
+                              μ̂::Vector{Float64}, Σ̂::Matrix{Float64})
+    n = state.n
+    μ, Σ = make_μ_Σ_from_param_vec(p)
+    inds_upper = [CartesianIndex(i, j) for i = 1:n for j = i:n]
+    U = zeros(n, n); U[inds_upper] = p[(n+1):end]
+    U = Matrix(UpperTriangular(U))
+
+    Σsym = 0.5 .* (Σ .+ Σ')
+    Σsym .+= eps(Float64) * (tr(Σsym) + 1.0) * Matrix{Float64}(I, size(Σsym))
+    update_distribution!(state, μ, PDMat(Σsym))
+    d = outer_dist_from_state(state)
+
+    if G !== nothing
+        g_μ, g_U = grad_true_loss(d, μ̂, Σ̂; U = U)
+        G .= make_param_vec_from_μ_U(g_μ, g_U)
+    end
+    if F !== nothing
+        return moment_loss(d, μ̂, Σ̂)
+    end
+    return nothing
+end
