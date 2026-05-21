@@ -47,9 +47,14 @@ mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistribut
         μₑ, Σₑ = d.μ, d.Σ
         a, b = r.a, r.b
         n = length(d)
-        length(a) != n && error("The length of a does not match the length")
-        length(b) != n && error("The length of b does not match the length")
-        a > b && error("The a vector must be less than the b vector")
+        length(a) == n ||
+            throw(DimensionMismatch("a has length $(length(a)); expected $n"))
+        length(b) == n ||
+            throw(DimensionMismatch("b has length $(length(b)); expected $n"))
+        # Coordinate-wise check — vector `<` would compare lexicographically
+        # and silently accept e.g. a = [1, 3], b = [2, 2].
+        any(a .>= b) &&
+            throw(ArgumentError("each a[i] must be strictly less than b[i]; got a=$a, b=$b"))
 
         if n ≥ 2
             μᵃ = [μₑ[setdiff(1:n,j)]  +  Σₑ[setdiff(1:n,j),j] * (a[j]-μₑ[j])/Σₑ[j,j]
@@ -101,10 +106,11 @@ query recomputes from scratch. Pair with [`outer_dist_from_state`](@ref)
 to obtain a fresh outer distribution wrapper.
 """
 function update_distribution!(s::BoxTruncatedMvNormalRecursiveMomentsState,
-                              μₑ::AbstractVector{Float64},
-                              Σₑ::AbstractMatrix{Float64})
-    Σpd = Σₑ isa PDMat ? Σₑ : PDMat(0.5 .* (Matrix(Σₑ) .+ Matrix(Σₑ)'))
-    s.d = MvNormal(Vector{Float64}(μₑ), Σpd)
+                              μₑ::AbstractVector,
+                              Σₑ::AbstractMatrix)
+    μv  = Vector{Float64}(μₑ)
+    Σpd = Σₑ isa PDMat ? Σₑ : PDMat(0.5 .* (Matrix{Float64}(Σₑ) .+ Matrix{Float64}(Σₑ)'))
+    s.d = MvNormal(μv, Σpd)
 
     @inbounds for j in 1:s.n
         σj = sqrt(Σpd[j, j])
@@ -149,7 +155,15 @@ rebuild this thin wrapper on each call; the expensive recursion tree is
 reused.
 """
 function outer_dist_from_state(state::BoxTruncatedMvNormalRecursiveMomentsState)
-    return TruncatedMvDistribution(state.d, state.r, state)
+    # Pin `D = MvNormal` (abstract) so the result matches the public alias
+    # `RecursiveMomentsBoxTruncatedMvNormal` / `TruncatedMvNormal`. Without
+    # the explicit type parameters Julia would infer `D = FullNormal`, which
+    # is *not* a subtype of `TruncatedMvDistribution{MvNormal, …}` and the
+    # downstream methods (`raw_moment`, `moment_loss`, `grad_true_loss`,
+    # `update_distribution!` users…) would all `MethodError`.
+    return TruncatedMvDistribution{MvNormal, BoxTruncationRegion,
+                                   BoxTruncatedMvNormalRecursiveMomentsState}(
+                                       state.d, state.r, state)
 end
 
 function init_dicts(n::Int,max_moment_levels::Int)

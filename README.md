@@ -56,22 +56,51 @@ Julia 1.10 or newer.
 ### Build a distribution and read off its moments
 
 ```julia
-using TruncatedDistributions, PDMats
+using TruncatedDistributions
 
 μ = [0.5, 0.5]
-Σ = PDMat([1.0 1.2; 1.2 2.0])
-a = [-1.0, -Inf]      # ±Inf box faces are fine
+Σ = [1.0 1.2;        # plain Matrix — auto-wrapped in a PDMat for you
+     1.2 2.0]
+a = [-1.0, -Inf]     # ±Inf box faces are fine
 b = [ 0.5,  1.0]
 
-d = RecursiveMomentsBoxTruncatedMvNormal(μ, Σ, a, b)
+d = TruncatedMvNormal(μ, Σ, a, b)   # alias for RecursiveMomentsBoxTruncatedMvNormal
 
 length(d)             # 2
+size(d)               # (2,)
 insupport(d, [0, 0])  # true
 tp(d)                 # probability mass inside the box (under the untruncated MvNormal)
 mean(d)               # truncated mean
 cov(d)                # truncated covariance
-pdf(d, [0.0, 0.0])    # truncated density
+var(d); std(d); cor(d)
+pdf(d, [0.0, 0.0])
+logpdf(d, [0.0, 0.0])
 rand(d)               # one sample via rejection from the untruncated MvNormal
+rand(d, 100)          # 2 × 100 batch
+```
+
+`TruncatedMvNormal` is the recommended type. It is an alias for
+`RecursiveMomentsBoxTruncatedMvNormal` — the longer name spells out what
+the cached state holds. A second alias, `BasicBoxTruncatedMvNormal`,
+exposes a no-recursion implementation that integrates moments by direct
+cubature (fine at n = 2, 3; slower beyond that).
+
+Both `Σ` and the box bounds can be supplied as plain `Vector` / `Matrix`;
+they will be wrapped in `PDMat` and converted internally.
+
+### Access the untruncated distribution
+
+The underlying `MvNormal` lives on `d.untruncated`, and the truncation
+region on `d.region`:
+
+```julia
+d.untruncated      # the MvNormal(μ, Σ)
+d.untruncated.μ
+d.untruncated.Σ    # a PDMat
+d.region           # the BoxTruncationRegion
+d.region.a; d.region.b
+pdf(d.untruncated, [0.0, 0.0])   # untruncated density
+rand(d.untruncated, 100)         # untruncated samples
 ```
 
 The first call to `mean(d)` / `cov(d)` runs the recursive moment formula
@@ -101,7 +130,7 @@ for any multi-index `κ`. Divide by `raw_moment(d, zeros(Int, n))` to get
 the corresponding truncated-distribution moment.
 
 ```julia
-d  = RecursiveMomentsBoxTruncatedMvNormal(μ, Σ, a, b; max_moment_levels = 4)
+d  = TruncatedMvNormal(μ, Σ, a, b; max_moment_levels = 4)
 m0 = raw_moment(d, [0, 0])              # = tp(d) up to integration error
 m4 = raw_moment(d, [2, 2])              # truncated E[x₁² x₂²] · tp(d)
 ```

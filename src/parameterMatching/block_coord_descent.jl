@@ -240,7 +240,7 @@ end
 function _marginal_loss_k(μ, Σ, S::Vector{Int}, a, b, μ̂, Σ̂)
     μ_S  = μ[S]
     Σ_SS = _symmetrize_with_jitter(Σ[S, S])
-    d = RecursiveMomentsBoxTruncatedMvNormal(μ_S, PDMat(Σ_SS), a[S], b[S])
+    d = TruncatedMvNormal(μ_S, Σ_SS, a[S], b[S])
     return moment_loss(d, μ̂[S], Σ̂[S, S])
 end
 
@@ -269,7 +269,7 @@ end
 
 function _full_moment_loss(μ, Σ, a, b, μ̂, Σ̂)
     Σsym = _symmetrize_with_jitter(Σ)
-    d = RecursiveMomentsBoxTruncatedMvNormal(μ, PDMat(Σsym), a, b)
+    d = TruncatedMvNormal(μ, Σsym, a, b)
     return moment_loss(d, μ̂, Σ̂)
 end
 
@@ -383,9 +383,16 @@ end
 
 function _try_1d_loss(μ::Real, σ²::Real, a::Real, b::Real,
                        μ̂::Real, Σ̂ii::Real)
-    d = truncated(Normal(μ, sqrt(max(σ², eps()))), a, b)
-    m = moments(d, 2)
-    return (m[1] - μ̂)^2 + (m[2] - m[1]^2 - Σ̂ii)^2
+    # Returns the *same scale* of moment loss as `_marginal_loss_k` /
+    # `moment_loss` so the BCD acceptance test compares like with like:
+    # L = ½‖μA − μ̂‖² + ½‖ΣA − Σ̂‖²_F. (Earlier this returned the unhalved
+    # sum-of-squares, which let the 1D block accept updates that were
+    # ~2× worse than the marginal cross-section saw.)
+    d  = truncated(Normal(μ, sqrt(max(σ², eps()))), a, b)
+    m  = moments(d, 2)
+    μA = m[1]
+    ΣA = m[2] - μA^2
+    return 0.5 * ((μA - μ̂)^2 + (ΣA - Σ̂ii)^2)
 end
 
 # `vector_fg_true_loss` plus a proximal `λ ‖p - p_anchor‖²` term.

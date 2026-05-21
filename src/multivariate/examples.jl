@@ -52,7 +52,7 @@ end
 Create a distribution from an example.
 """
 function dist_from_example(ne::NormalExample)
-    return RecursiveMomentsBoxTruncatedMvNormal(ne.μ, PDMat(ne.Σ), ne.a, ne.b)
+    return TruncatedMvNormal(ne.μ, ne.Σ, ne.a, ne.b)
 end
 
 #########################

@@ -6,6 +6,16 @@ mean `μ̂` and covariance `Σ̂`. Returns `(μ, Σ, info)`, where `info` is a
 NamedTuple carrying the final loss, wall time, method actually used and
 algorithm-specific traces.
 
+# Notes
+
+The fit runs in the original `(μ, Σ)` coordinates with no global
+standardisation; the loss
+`L = ½‖μA − μ̂‖² + ½‖ΣA − Σ̂‖²_F` weights the mean- and
+covariance-residual blocks equally. The coordinate warm-start does
+per-axis `(μ, log σ²)` rescaling, which is usually enough for targets at
+`O(1)` scale. For targets at very different scales, rescale the inputs
+yourself or watch issue #7.
+
 # Methods
 
 * `:auto`  — pick `:lbfgs` for `length(μ̂) ≤ n_threshold` and `:bcd` for
@@ -24,7 +34,8 @@ algorithm-specific traces.
 * `μ_init`, `Σ_init` — starting point for the optimiser. If omitted, the
                       coordinate warm-start is used.
 * `ftarget`         — stop when the loss falls below this (default 1e-3).
-* `time_limit`      — seconds per outer optimiser (default 60.0).
+* `time_limit`      — seconds (`:lbfgs` only; the BCD path is paced
+                      instead by `iterations × bcd_inner_iters`).
 * `iterations`      — outer-loop iteration cap (default 50 for LBFGS,
                       30 for BCD).
 * `verbose`         — print one line per iteration.

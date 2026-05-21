@@ -100,7 +100,7 @@ end
 end
 
 @testset "update_distribution! refreshes the cache" begin
-    μ1 = [0.0, 0.0]; Σ1 = PDMat([1.0 0.0; 0.0 1.0])
+    μ1 = [0.0, 0.0]; Σ1 = [1.0 0.0; 0.0 1.0]      # plain Matrix — gets auto-wrapped
     a = [-1.0, -1.0]; b = [1.0, 1.0]
     d = TruncatedMvNormal(μ1, Σ1, a, b)
 
@@ -109,7 +109,7 @@ end
     @test isapprox(m1, [0.0, 0.0]; atol = 1e-6)
 
     # Bias the underlying mean — truncated mean should shift positive.
-    μ2 = [0.6, 0.6]; Σ2 = PDMat([1.0 0.4; 0.4 1.0])
+    μ2 = [0.6, 0.6]; Σ2 = [1.0 0.4; 0.4 1.0]
     update_distribution!(d.state, μ2, Σ2)
     d2 = outer_dist_from_state(d.state)
     m2 = mean(d2)

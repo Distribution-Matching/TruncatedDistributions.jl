@@ -20,7 +20,7 @@ using Distributions
 
 function _targets_from(μ, Σ, a, b)
     set_kr_base_backend!(:mvnormalcdf)
-    d = RecursiveMomentsBoxTruncatedMvNormal(μ, PDMat(Σ), a, b)
+    d = TruncatedMvNormal(μ, Σ, a, b)
     return collect(mean(d)), Matrix(cov(d))
 end
 
@@ -58,9 +58,7 @@ end
 
     @test info.method === :lbfgs
     @test info.loss < 1e-6
-    d_fit = RecursiveMomentsBoxTruncatedMvNormal(μ_fit,
-                                                 PDMat(Matrix(Σ_fit)),
-                                                 a, b)
+    d_fit = TruncatedMvNormal(μ_fit, Matrix(Σ_fit), a, b)
     # LBFGS converges to ~sqrt(ftarget) ≈ 1e-4 per moment entry; allow a
     # little slack for the QMC-based KR base case used at ≥ 2D.
     @test isapprox(mean(d_fit), μ̂; atol = 5e-4)
@@ -79,9 +77,7 @@ end
                                       verbose = false)
     @test info.method === :bcd
     @test info.loss < 1e-3
-    d_fit = RecursiveMomentsBoxTruncatedMvNormal(μ_fit,
-                                                 PDMat(Matrix(Σ_fit)),
-                                                 a, b)
+    d_fit = TruncatedMvNormal(μ_fit, Matrix(Σ_fit), a, b)
     @test isapprox(mean(d_fit), μ̂; atol = 5e-2)
     @test isapprox(Matrix(cov(d_fit)), Σ̂; atol = 5e-2)
 end

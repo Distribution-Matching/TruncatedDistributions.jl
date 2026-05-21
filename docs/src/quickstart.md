@@ -3,11 +3,12 @@
 ## Build a distribution and read off its moments
 
 ```julia
-using TruncatedDistributions, PDMats
+using TruncatedDistributions
 
 μ = [0.5, 0.5]
-Σ = PDMat([1.0 1.2; 1.2 2.0])
-a = [-1.0, -Inf]      # ±Inf box faces are fine
+Σ = [1.0 1.2;        # plain Matrix — auto-wrapped in a PDMat
+     1.2 2.0]
+a = [-1.0, -Inf]     # ±Inf box faces are fine
 b = [ 0.5,  1.0]
 
 d = TruncatedMvNormal(μ, Σ, a, b)
@@ -24,6 +25,22 @@ pdf(d, [0.0, 0.0])    # truncated density (0 outside the box)
 logpdf(d, [0.0, 0.0]) # truncated log-density (−Inf outside the box)
 rand(d)               # one sample via rejection
 rand(d, 100)          # 2 × 100 batch
+```
+
+`TruncatedMvNormal` is the friendly alias for the recommended
+[`RecursiveMomentsBoxTruncatedMvNormal`](@ref). Both `μ`, `Σ`, and the
+box bounds may be supplied as plain `Vector` / `Matrix` — they are
+converted internally.
+
+The underlying `MvNormal` is on `d.untruncated` and the truncation
+region on `d.region`:
+
+```julia
+d.untruncated      # the MvNormal(μ, Σ)
+d.untruncated.μ
+d.untruncated.Σ    # a PDMat
+d.region           # the BoxTruncationRegion
+d.region.a; d.region.b
 ```
 
 The first call to `mean(d)` / `cov(d)` runs the moment recursion and

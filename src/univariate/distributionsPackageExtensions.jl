@@ -5,12 +5,17 @@ function moment(d::Truncated{Normal{T},Continuous}, k::Int) where T
     k == 0 ? one(T) : last(moments(d,k))
 end
 
-"
-Compute the 1'st to k'th moment of a truncated normal distribution. Uses a recursive formula.
-"
+"""
+    moments(d::Truncated{<:Normal}, k::Int) -> Vector
+
+Compute the 1st through `k`th raw moments of a 1D truncated normal via
+the closed-form recursion. Returns a length-`k` vector. `moments(d, 0)`
+returns an empty vector (use [`moment(d, 0)`](@ref) to get the scalar
+`1`).
+"""
 function moments(d::Truncated{Normal{T},Continuous}, k::Int) where T
-    k == 0 && return 1
-    m = Array{T}(undef,k+2) #Array of moments with index i being the i-2's moment 
+    k == 0 && return T[]
+    m = Array{T}(undef,k+2) #Array of moments with index i being the i-2's moment
                             #(treating the -1's moment as 0 and 0'ths moment as 1)
     m[1], m[2] = 0, 1 
     pars = params(d)
