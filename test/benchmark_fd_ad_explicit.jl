@@ -173,13 +173,28 @@ function run_one(label, ne)
     end
     flush(stdout)
 
-    # Explicit Kan-Robotti with fg! fast path (one recursion per iter).
+    # Explicit Kan-Robotti with fg! fast path (one recursion per iter),
+    # base case via hcubature_inf.
+    set_kr_base_backend!(:hcubature)
     try
         t = @elapsed (r = fit_explicit_kr_fg(p0, a, b, μ̂, Σ̂))
-        @printf("EXP-KR-fg %.2fs(%.2e)", t, r.minimum)
+        @printf("EXP-KR-H %.2fs(%.2e) ", t, r.minimum)
     catch e
-        print("EXP-KR-fg ERR")
+        print("EXP-KR-H ERR ")
     end
+    flush(stdout)
+
+    # Same explicit gradient + fg! pipeline, base case via MvNormalCDF
+    # (Genz–Bretz QMC). This isolates the speedup from swapping the
+    # base-case integrator only; the gradient construction is identical.
+    set_kr_base_backend!(:mvnormalcdf)
+    try
+        t = @elapsed (r = fit_explicit_kr_fg(p0, a, b, μ̂, Σ̂))
+        @printf("EXP-KR-MVN %.2fs(%.2e)", t, r.minimum)
+    catch e
+        print("EXP-KR-MVN ERR")
+    end
+    set_kr_base_backend!(:hcubature)  # restore default
     println()
 end
 

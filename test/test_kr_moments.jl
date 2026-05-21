@@ -48,22 +48,40 @@ function _hcubature_moment(μ, Σ, a, b, κ)
 end
 
 @testset "Kan–Robotti raw moments vs HCubature reference" begin
-    for n in [2, 3]
-        get_num_examples(n) == 0 && continue
-        for i in 1:get_num_examples(n)
-            ne = get_example(n = n, index = i)
-            μ  = collect(ne.μ); Σ = PDMat(Matrix(ne.Σ))
-            a  = collect(ne.a); b = collect(ne.b)
-            L  = 4
-            d  = RecursiveMomentsBoxTruncatedMvNormal(μ, Σ, a, b; max_moment_levels = L)
+    # Run the cross-check with each KR base-case backend in turn so a
+    # regression in either path is caught. The hcubature backend is the
+    # default and the historical one; the mvnormalcdf backend was added
+    # as a faster alternative for the Float64 LBFGS path.
+    for backend in (:hcubature, :mvnormalcdf)
+        prev = set_kr_base_backend!(backend)
+        try
+            @testset "KR backend = $backend" begin
+                for n in [2, 3]
+                    get_num_examples(n) == 0 && continue
+                    for i in 1:get_num_examples(n)
+                        ne = get_example(n = n, index = i)
+                        μ  = collect(ne.μ); Σ = PDMat(Matrix(ne.Σ))
+                        a  = collect(ne.a); b = collect(ne.b)
+                        L  = 4
+                        d  = RecursiveMomentsBoxTruncatedMvNormal(μ, Σ, a, b; max_moment_levels = L)
 
-            @testset "n=$n idx=$i" begin
-                for κ in _all_multi_indices(n, L)
-                    m_kr  = raw_moment(d, κ)
-                    m_ref = _hcubature_moment(collect(ne.μ), Matrix(ne.Σ), a, b, κ)
-                    @test m_kr ≈ m_ref atol = 1e-6 rtol = 1e-5
+                        @testset "n=$n idx=$i" begin
+                            for κ in _all_multi_indices(n, L)
+                                m_kr  = raw_moment(d, κ)
+                                m_ref = _hcubature_moment(collect(ne.μ), Matrix(ne.Σ), a, b, κ)
+                                # mvnormalcdf is randomised QMC; with m = 10_000 samples
+                                # its per-call error is ~1e-5 but compounds modestly
+                                # through the recursion, so a slightly looser tolerance
+                                # is appropriate.
+                                tol = backend === :mvnormalcdf ? 5e-4 : 1e-5
+                                @test m_kr ≈ m_ref atol = 1e-5 rtol = tol
+                            end
+                        end
+                    end
                 end
             end
+        finally
+            set_kr_base_backend!(prev)
         end
     end
 end

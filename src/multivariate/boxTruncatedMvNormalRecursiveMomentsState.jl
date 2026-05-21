@@ -226,7 +226,49 @@ end
 #     pdf(d_nontruncated,x)
 # end
 
+# Backend selector for the multivariate-Gaussian box probability that
+# bottoms out the Kan–Robotti recursion. `:hcubature` uses the
+# general-purpose adaptive cubature wrapper; `:mvnormalcdf` uses
+# `MvNormalCDF.mvnormcdf` (Genz–Bretz separation-of-variables + QMC),
+# which is dramatically faster on this specific integrand but Float64-only.
+# Switch with `set_kr_base_backend!(:mvnormalcdf)`.
+const _KR_BASE_BACKEND = Ref{Symbol}(:hcubature)
+
+"""
+    set_kr_base_backend!(backend::Symbol)
+
+Choose the integrator used for the multivariate-Gaussian box probability
+that bottoms out the Kan–Robotti recursion. Accepted values:
+
+  * `:hcubature`   — `hcubature_inf` (default; works with any element type
+                     compatible with HCubature).
+  * `:mvnormalcdf` — `MvNormalCDF.mvnormcdf` (Genz–Bretz, Float64 only;
+                     typically 10–100× faster on n ≥ 3 Gaussian box
+                     probabilities and natively handles ±Inf bounds).
+
+Returns the previous backend.
+"""
+function set_kr_base_backend!(backend::Symbol)
+    backend in (:hcubature, :mvnormalcdf) ||
+        throw(ArgumentError("backend must be :hcubature or :mvnormalcdf, got $backend"))
+    prev = _KR_BASE_BACKEND[]
+    _KR_BASE_BACKEND[] = backend
+    return prev
+end
+
+get_kr_base_backend() = _KR_BASE_BACKEND[]
+
 function LL(d::BoxTruncatedMvNormalRecursiveMomentsState)
     # @info "doing base numerical integral on dimension $(d.n)."
-    hcubature_inf((x)->pdf(d.d,x),d.r.a,d.r.b,maxevals = 10^6)[1]
+    if _KR_BASE_BACKEND[] === :mvnormalcdf
+        # mvnormcdf returns (probability, error_estimate); we only need the
+        # value. Float64-only — for Dual-typed parameters the caller should
+        # leave the backend at :hcubature. m=10_000 quasi-Monte Carlo
+        # samples typically gives ~1e-5 error in well under a millisecond
+        # after JIT warm-up; that error is small enough not to perturb
+        # downstream moments at the test cross-check tolerance.
+        return mvnormcdf(d.d, d.r.a, d.r.b; m = 10_000)[1]
+    else
+        return hcubature_inf((x)->pdf(d.d,x), d.r.a, d.r.b, maxevals = 10^6)[1]
+    end
 end

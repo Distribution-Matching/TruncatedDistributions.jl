@@ -10,6 +10,7 @@ using Parameters
 using PRIMA
 using Optim
 using Combinatorics
+using MvNormalCDF
 
 import Distributions: insupport, pdf, moment
 import Base: size, length, show, rand
@@ -52,6 +53,8 @@ export
     vector_grad_true_loss,
     vector_fg_true_loss,
     hcubature_inf,
+    set_kr_base_backend!,
+    get_kr_base_backend,
     loss_based_fit,
     truncateDynamicFit,
     moment_loss,
