@@ -21,8 +21,14 @@ function moments(d::Truncated{Normal{T},Continuous}, k::Int) where T
     ΦUL = cdf(Normal(),zU) - cdf(Normal(),zL)
     for i in 3:(k+2)
         kk = i-2
+        # Boundary contributions: U^{kk-1} ϕU and L^{kk-1} ϕL. If a bound is
+        # at ±∞ the Gaussian factor vanishes faster than the polynomial, so
+        # the limit is 0, but the naïve product evaluates as Inf * 0 = NaN.
+        # Skip the term when the corresponding ϕ is exactly zero.
+        Uterm = iszero(ϕU) ? zero(T) : U^(kk-1) * ϕU
+        Lterm = iszero(ϕL) ? zero(T) : L^(kk-1) * ϕL
         #recursive formula for kk'th moment as a function of the previous two moments (if kk=-1 it uses 0)
-        m[i] = (kk-1)*σ²*m[i-2] + μ*m[i-1] - σ*(U^(kk-1)*ϕU - L^(kk-1)*ϕL)/ΦUL
+        m[i] = (kk-1)*σ²*m[i-2] + μ*m[i-1] - σ*(Uterm - Lterm)/ΦUL
     end
     return m[3:(k+2)]
 end

@@ -48,20 +48,26 @@ import TruncatedDistributions: hcubature_inf
     end
 
     @testset "Truncated MvNormal — Manjunath & Wilhelm (2021), Example 1" begin
-        # Recursive moments must reproduce the published moments.
+        # Recursive moments must reproduce the published moments, both
+        # with a large finite cap at -20 and with the true -Inf bound
+        # (the latter exercises the `hcubature_inf` substitution that
+        # `RecursiveMomentsBoxTruncatedMvNormal` routes its base case
+        # through).
         μ = [0.5, 0.5]
         Σ = PDMat([1.0 1.2; 1.2 2.0])
-        a_finite = [-1.0, -20.0]      # large finite surrogate for -∞
-        b        = [ 0.5,   1.0]
-        d = RecursiveMomentsBoxTruncatedMvNormal(μ, Σ, a_finite, b)
-        @test tp(d)        ≈ 0.398482903122761      atol = 1e-9
-        @test mean(d)[1]   ≈ -0.1516343              atol = 1e-6
-        @test mean(d)[2]   ≈ -0.3881151              atol = 1e-6
-        @test cov(d)[1,1]  ≈  0.1630439              atol = 1e-6
-        @test cov(d)[1,2]  ≈  0.1613371              atol = 1e-6
-        @test cov(d)[2,2]  ≈  0.6062505              atol = 1e-6
+        b = [ 0.5,   1.0]
+        for a in ([-1.0, -20.0], [-1.0, -Inf])
+            d = RecursiveMomentsBoxTruncatedMvNormal(μ, Σ, a, b)
+            @test tp(d)        ≈ 0.398482903122761      atol = 1e-9
+            @test mean(d)[1]   ≈ -0.1516343              atol = 1e-6
+            @test mean(d)[2]   ≈ -0.3881151              atol = 1e-6
+            @test cov(d)[1,1]  ≈  0.1630439              atol = 1e-6
+            @test cov(d)[1,2]  ≈  0.1613371              atol = 1e-6
+            @test cov(d)[2,2]  ≈  0.6062505              atol = 1e-6
+        end
     end
 
     include("test_gradients.jl")
+    include("test_kr_moments.jl")
 
 end

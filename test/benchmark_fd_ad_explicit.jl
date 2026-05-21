@@ -48,7 +48,11 @@ function unpack_generic(p::AbstractVector{T}, n::Int) where {T}
 end
 
 # Truncated-moment integrals via HCubature, generic in T. Returns
-# (m0, m1, m2) with m1 length-n vector and m2 n×n matrix.
+# (m0, m1, m2) with m1 length-n vector and m2 n×n matrix. Bounds may
+# contain ±Inf; the package's `hcubature_inf` wrapper applies the
+# standard tanh-style substitution to map each unbounded coordinate to
+# a finite interval before integrating, so the HCubature path sees the
+# same true domain as the Kan–Robotti recursion.
 function truncated_moments_hcub(μ::AbstractVector{T}, Σ::AbstractMatrix{T},
                                 a::AbstractVector{Float64},
                                 b::AbstractVector{Float64};
@@ -59,9 +63,9 @@ function truncated_moments_hcub(μ::AbstractVector{T}, Σ::AbstractMatrix{T},
     detΣ   = det(Σ)
     norm_const = T((2π)^(-n / 2)) / sqrt(detΣ)
     dens(x) = norm_const * exp(T(-0.5) * dot(x .- μ, Σinv * (x .- μ)))
-    m0      = hcubature(dens, a, b; rtol = rtol, maxevals = maxevals)[1]
-    m1      = [hcubature(x -> x[i] * dens(x), a, b; rtol = rtol, maxevals = maxevals)[1] for i in 1:n]
-    m2      = [hcubature(x -> x[i] * x[j] * dens(x), a, b; rtol = rtol, maxevals = maxevals)[1] for i in 1:n, j in 1:n]
+    m0      = hcubature_inf(dens, a, b; rtol = rtol, maxevals = maxevals)[1]
+    m1      = [hcubature_inf(x -> x[i] * dens(x), a, b; rtol = rtol, maxevals = maxevals)[1] for i in 1:n]
+    m2      = [hcubature_inf(x -> x[i] * x[j] * dens(x), a, b; rtol = rtol, maxevals = maxevals)[1] for i in 1:n, j in 1:n]
     return m0, m1, m2
 end
 
@@ -131,26 +135,20 @@ function target(ne; digits::Int = 1)
     return d, μ̂, Σ̂
 end
 
-# Use a large finite cap for the half-infinite Example 1 so HCubature
-# can integrate.
-function finite_bounds(d)
-    a = collect(d.region.a); b = collect(d.region.b)
-    cap = 20.0  # ~14σ for Σ_22 = 2; effectively the open end
-    a .= max.(a, -cap); b .= min.(b, cap)
-    return a, b
-end
-
 function run_one(label, ne)
     d, μ̂, Σ̂ = target(ne)
-    a_fin, b_fin = finite_bounds(d)
+    # `hcubature_inf` now handles ±Inf bounds via the standard
+    # tanh-style substitution, so HCubature and Kan–Robotti both see
+    # the example's true domain (no finite-cap workaround).
+    a = collect(d.region.a); b = collect(d.region.b)
     p0 = make_param_vec_from_μ_Σ(μ̂, Σ̂)
-    init = vector_moment_loss_hcub(p0, a_fin, b_fin, μ̂, Σ̂)
+    init = vector_moment_loss_hcub(p0, a, b, μ̂, Σ̂)
     @printf("[%-22s] init=%.4e   ", label, init)
     flush(stdout)
 
     # FD
     try
-        t = @elapsed (r = fit_fd(p0, a_fin, b_fin, μ̂, Σ̂))
+        t = @elapsed (r = fit_fd(p0, a, b, μ̂, Σ̂))
         @printf("FD %.2fs(%.2e) ", t, r.minimum)
     catch e
         print("FD ERR ")
@@ -159,26 +157,16 @@ function run_one(label, ne)
 
     # AD
     try
-        t = @elapsed (r = fit_ad(p0, a_fin, b_fin, μ̂, Σ̂))
+        t = @elapsed (r = fit_ad(p0, a, b, μ̂, Σ̂))
         @printf("AD %.2fs(%.2e) ", t, r.minimum)
     catch e
         print("AD ERR ")
     end
     flush(stdout)
 
-    # Explicit via HCubature
+    # Explicit via Kan-Robotti
     try
-        t = @elapsed (r = fit_explicit_hcub(p0, a_fin, b_fin, μ̂, Σ̂))
-        @printf("EXP-H %.2fs(%.2e) ", t, r.minimum)
-    catch e
-        print("EXP-H ERR ")
-    end
-    flush(stdout)
-
-    # Explicit via Kan-Robotti (uses the full a,b including ∞)
-    a_kr = collect(d.region.a); b_kr = collect(d.region.b)
-    try
-        t = @elapsed (r = fit_explicit_kr(p0, a_kr, b_kr, μ̂, Σ̂))
+        t = @elapsed (r = fit_explicit_kr(p0, a, b, μ̂, Σ̂))
         @printf("EXP-KR %.2fs(%.2e) ", t, r.minimum)
     catch e
         print("EXP-KR ERR ")
@@ -187,7 +175,7 @@ function run_one(label, ne)
 
     # Explicit Kan-Robotti with fg! fast path (one recursion per iter).
     try
-        t = @elapsed (r = fit_explicit_kr_fg(p0, a_kr, b_kr, μ̂, Σ̂))
+        t = @elapsed (r = fit_explicit_kr_fg(p0, a, b, μ̂, Σ̂))
         @printf("EXP-KR-fg %.2fs(%.2e)", t, r.minimum)
     catch e
         print("EXP-KR-fg ERR")

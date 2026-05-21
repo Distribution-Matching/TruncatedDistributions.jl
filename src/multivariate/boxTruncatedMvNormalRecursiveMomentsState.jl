@@ -6,7 +6,7 @@ mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistribut
     r::BoxTruncationRegion
     n::Int                  #dimension
     max_moment_levels::Int
-    
+
     # # #Children of type 'a' or 'b' are lower dimensional distributions used to for recursive computation
     children_a::Vector{BoxTruncatedMvNormalRecursiveMomentsState}
     children_b::Vector{BoxTruncatedMvNormalRecursiveMomentsState}
@@ -17,6 +17,14 @@ mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistribut
     treeDict::Dict{Vector{Int},Children}
     rawMomentsComputed::Bool
 
+    # --- Precomputed scratch, set once at construction. Recomputing these on
+    # --- every call to c_vector was the dominant per-call allocation cost
+    # --- before this change.
+    phi_a::Vector{Float64}                # 1D Gaussian pdf at the lower box face
+    phi_b::Vector{Float64}                # 1D Gaussian pdf at the upper box face
+    complement_idx::Vector{Vector{Int}}   # complement_idx[j] = setdiff(1:n, j)
+    kbuf::Vector{Int}                     # reusable scratch for kappa-with-one-index-decremented
+
     tp::Float64
     μ::Vector{Float64}
     Σ::PDMat
@@ -26,16 +34,16 @@ mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistribut
 
     function BoxTruncatedMvNormalRecursiveMomentsState(d::MvNormal, r::BoxTruncationRegion, max_moment_levels::Int)
         μₑ, Σₑ = d.μ, d.Σ
-        a, b = r.a, r.b                              
+        a, b = r.a, r.b
         n = length(d)
         length(a) != n && error("The length of a does not match the length")
         length(b) != n && error("The length of b does not match the length")
         a > b && error("The a vector must be less than the b vector")
 
         if n ≥ 2
-            μᵃ = [μₑ[setdiff(1:n,j)]  +  Σₑ[setdiff(1:n,j),j] * (a[j]-μₑ[j])/Σₑ[j,j] 
+            μᵃ = [μₑ[setdiff(1:n,j)]  +  Σₑ[setdiff(1:n,j),j] * (a[j]-μₑ[j])/Σₑ[j,j]
                     for j in 1:n]
-            μᵇ = [μₑ[setdiff(1:n,j)]  +  Σₑ[setdiff(1:n,j),j] * (b[j]-μₑ[j])/Σₑ[j,j] 
+            μᵇ = [μₑ[setdiff(1:n,j)]  +  Σₑ[setdiff(1:n,j),j] * (b[j]-μₑ[j])/Σₑ[j,j]
                     for j in 1:n]
             Σ̃ = [Σₑ[setdiff(1:n,j),setdiff(1:n,j)] - (1/Σₑ[j,j])*Σₑ[setdiff(1:n,j),j]*Σₑ[j,setdiff(1:n,j)]' for j in 1:n]
             children_a = [BoxTruncatedMvNormalRecursiveMomentsState(
@@ -51,7 +59,15 @@ mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistribut
             children_b = Array{BoxTruncatedMvNormalRecursiveMomentsState,1}[] #no children
         end
         rawMomentDict, treeDict = init_dicts(n,max_moment_levels)
+
+        # Precompute the 1D Gaussian pdf at each box face and the per-axis
+        # complement index. pdf(Normal, ±Inf) is 0, which is what we want.
+        phi_a = [pdf(Normal(μₑ[j], sqrt(Σₑ[j,j])), a[j]) for j in 1:n]
+        phi_b = [pdf(Normal(μₑ[j], sqrt(Σₑ[j,j])), b[j]) for j in 1:n]
+        complement_idx = [setdiff(1:n, j) for j in 1:n]
+
         new(d,r,n,max_moment_levels,children_a,children_b,rawMomentDict,treeDict,false,
+            phi_a, phi_b, complement_idx, zeros(Int, n),
             NaN,
             Vector{Float64}(undef,0),
             PDMat(Array{Float64,2}(I,n,n)),
@@ -96,27 +112,54 @@ function compute_moments(d::BoxTruncatedMvNormalRecursiveMomentsState)
     function compute_children_moments(d::BoxTruncatedMvNormalRecursiveMomentsState,baseKey::Vector{Int})
         d.treeDict[baseKey] == nothing && return #recursion stopping criteria
         c = c_vector(d,baseKey)
+        Σc = d.d.Σ * c                              # hoist out of the inner loop:
+                                                    # c depends only on baseKey, so Σ*c does too.
         for k in d.treeDict[baseKey]
-            i = findfirst((x)->x==1,k-baseKey)     
-            d.rawMomentDict[k] = d.d.μ[i]*d.rawMomentDict[baseKey] + (d.d.Σ*c)[i]
+            # k and baseKey differ in exactly one coordinate, where k is one
+            # larger. A scalar scan finds it without allocating k - baseKey.
+            i = 0
+            @inbounds for s in eachindex(k)
+                if k[s] != baseKey[s]
+                    i = s
+                    break
+                end
+            end
+            d.rawMomentDict[k] = d.d.μ[i]*d.rawMomentDict[baseKey] + Σc[i]
             compute_children_moments(d,k)
         end
     end
 
     function c_vector(d::BoxTruncatedMvNormalRecursiveMomentsState,k::Vector{Int})
         c = Vector{Float64}(undef,d.n)
+        kbuf = d.kbuf
+        copyto!(kbuf, k)
         for j in 1:d.n
-            kMinus = copy(k)
-            kMinus[j] = kMinus[j]-1
-            F0 = (sum(kMinus .>= 0) == d.n) ? d.rawMomentDict[kMinus] : 0.0 
-            F1 = length(d.children_a) >= 1 ? raw_moment(d.children_a[j],k[setdiff(1:d.n,j)]) : 0.0
-            F2 = length(d.children_b) >= 1 ? raw_moment(d.children_b[j],k[setdiff(1:d.n,j)]) : 0.0
-            ϕ = pdf.(Normal(d.d.μ[j],sqrt(d.d.Σ[j,j])),[d.r.a[j],d.r.b[j]] )
-            c[j] =  k[j]*F0  +  d.r.a[j]^k[j]*ϕ[1]*F1  -  d.r.b[j]^k[j]*ϕ[2]*F2 
+            # F0 = m^{(p-e_j)} if k[j] > 0, else 0. Use a reusable buffer
+            # rather than `copy(k); kbuf[j] -= 1`, then restore in place.
+            if k[j] > 0
+                kbuf[j] = k[j] - 1
+                F0 = d.rawMomentDict[kbuf]
+                kbuf[j] = k[j]              # restore
+            else
+                F0 = 0.0
+            end
+            # F1, F2: lower-dimensional truncated moments at the j-th box face.
+            comp = d.complement_idx[j]
+            F1 = isempty(d.children_a) ? 0.0 : raw_moment(d.children_a[j], @view k[comp])
+            F2 = isempty(d.children_b) ? 0.0 : raw_moment(d.children_b[j], @view k[comp])
+            # 1D Gaussian pdf at the j-th lower / upper box face — precomputed
+            # at construction; constants in the inner loop. pdf(N(μ,σ), ±Inf) = 0.
+            # Guard against the indeterminate form: when the box face is at
+            # ±∞ and k[j] ≥ 1, naïvely a^k * phi(a) evaluates as Inf * 0 = NaN,
+            # but the true limit is 0 because the Gaussian decays
+            # super-polynomially. Skip the term when phi vanishes.
+            a_term = iszero(d.phi_a[j]) ? 0.0 : d.r.a[j]^k[j] * d.phi_a[j] * F1
+            b_term = iszero(d.phi_b[j]) ? 0.0 : d.r.b[j]^k[j] * d.phi_b[j] * F2
+            c[j] = k[j]*F0 + a_term - b_term
         end
         c
     end
-    
+
     if d.n > 1
         baseKey = zeros(Int,d.n) #[0,0,....,0]
         d.rawMomentDict[baseKey] = LL(d)
@@ -133,7 +176,7 @@ function compute_moments(d::BoxTruncatedMvNormalRecursiveMomentsState)
     d.rawMomentsComputed = true
 end
 
-function raw_moment(d::BoxTruncatedMvNormalRecursiveMomentsState,k::Vector{Int})
+function raw_moment(d::BoxTruncatedMvNormalRecursiveMomentsState,k::AbstractVector{Int})
     !d.rawMomentsComputed && compute_moments(d)
     return d.rawMomentDict[k]
 end

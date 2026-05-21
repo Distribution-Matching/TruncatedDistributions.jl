@@ -81,13 +81,14 @@ normal_examples[2] = [
                     arb_moment_to_check_index = (0, 3),
                     arb_moment_to_check_value = 52.44849808917711),
     # Manjunath & Wilhelm (2021), "Moments Calculation for the Doubly Truncated Multivariate
-    # Normal Density", Example 1. The original example takes a[2] = -Inf; we use a[2] = -20
-    # (≈ μ₂ - 14.5 σ₂) as a finite surrogate. Truncated moments below match the published
-    # values to 7 significant figures.
+    # Normal Density", Example 1. Uses the true a[2] = -Inf as specified in the original
+    # paper; the package's `hcubature_inf` wrapper substitutes the unbounded coordinate
+    # to a finite interval, and the Kan–Robotti recursion routes its base case through the
+    # same wrapper, so both code paths handle the semi-infinite domain natively.
     NormalExample(  μ = [0.5, 0.5],
                     Σ = [1.0 1.2;
                          1.2 2.0],
-                    a = [-1.0, -20.0],
+                    a = [-1.0, -Inf],
                     b = [ 0.5,   1.0],
                     tp = 0.398482903122761,
                     μ̂ = [-0.15163426285883586, -0.3881151019108365],
