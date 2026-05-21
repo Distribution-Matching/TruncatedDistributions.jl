@@ -1,12 +1,16 @@
 # TruncatedDistributions.jl
 
-Box-truncated multivariate normal distributions for Julia, with fast
-recursive moments and moment-matching parameter fitting.
+A Julia package for truncated multivariate distributions. The current
+functionality focuses on the **box-truncated multivariate normal**: fast
+recursive moments via the Kan–Robotti recursion, and parameter fitting by
+moment matching. The package is designed to grow to other multivariate
+families and truncation region types; the type hierarchy
+(`TruncatedMvDistribution{D, R, S}`) is generic in the underlying
+distribution, the region, and the cached state.
 
-The package builds on top of
-[Distributions.jl](https://github.com/JuliaStats/Distributions.jl) — for any
-univariate distribution use `Distributions.truncated`; this package fills in
-the multivariate case.
+For univariate truncation use `Distributions.truncated` from
+[Distributions.jl](https://github.com/JuliaStats/Distributions.jl);
+this package complements it with the multivariate case.
 
 ## Features
 
