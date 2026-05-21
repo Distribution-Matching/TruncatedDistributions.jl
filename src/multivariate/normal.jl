@@ -45,6 +45,3 @@ function RecursiveMomentsBoxTruncatedMvNormal(  μₑ::Vector{Float64},
     TruncatedMvDistribution{MvNormal,BoxTruncationRegion,BoxTruncatedMvNormalRecursiveMomentsState}(d,r,s)
 end
 
-# const EllipsoidTruncatedMvNormal = TruncatedMvDistribution{MvNormal,EllipticalTruncationRegion}
-# const PolytopeTruncatedMvNormal = TruncatedMvDistribution{MvNormal,PolytopeTruncationRegion}
-

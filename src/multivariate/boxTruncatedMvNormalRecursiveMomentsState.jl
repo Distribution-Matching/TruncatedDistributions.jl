@@ -1,4 +1,3 @@
-# const max_moment_levels = 2 #Just for mean and covariance matrix
 const Children = Union{Vector{Vector{Int}},Nothing}
 
 mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistributionState
@@ -7,13 +6,14 @@ mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistribut
     n::Int                  #dimension
     max_moment_levels::Int
 
-    # # #Children of type 'a' or 'b' are lower dimensional distributions used to for recursive computation
+    # Children of type 'a' or 'b' are lower-dimensional distributions used
+    # by the Kan–Robotti recursive moment computation.
     children_a::Vector{BoxTruncatedMvNormalRecursiveMomentsState}
     children_b::Vector{BoxTruncatedMvNormalRecursiveMomentsState}
 
-    # # #for each moment vector e.g. [0,1,0,1] or [0,0,2,0] has the tuple which is the computed (non-normalized) moment integral
-    # # #of that vector and a list of children vectors
-    rawMomentDict::Dict{Vector{Int},Float64} #note that the values are non-normalized moment integrals
+    # Values are non-normalised (raw) moment integrals; divide by the m^{(0)}
+    # entry to get the truncated-distribution moment.
+    rawMomentDict::Dict{Vector{Int},Float64}
     treeDict::Dict{Vector{Int},Children}
     rawMomentsComputed::Bool
 
@@ -161,7 +161,7 @@ end
 
 function compute_moments(d::BoxTruncatedMvNormalRecursiveMomentsState)
     function compute_children_moments(d::BoxTruncatedMvNormalRecursiveMomentsState,baseKey::Vector{Int})
-        d.treeDict[baseKey] == nothing && return #recursion stopping criteria
+        isnothing(d.treeDict[baseKey]) && return  # recursion stopping criterion
         c = c_vector(d,baseKey)
         Σc = d.d.Σ * c                              # hoist out of the inner loop:
                                                     # c depends only on baseKey, so Σ*c does too.
@@ -236,46 +236,6 @@ function raw_moment_dict(d::BoxTruncatedMvNormalRecursiveMomentsState)
     !d.rawMomentsComputed && compute_moments(d)
     return copy(d.rawMomentDict)
 end
-
-
-# moment(d::BoxTruncatedMvNormalRecursiveMomentsState,k::Vector{Int}) = raw_moment(d,k) / alpha(d)
-
-# alpha(d::BoxTruncatedMvNormalRecursiveMomentsState) = raw_moment(d,zeros(Int,d.n))
-
-# function mean(d::BoxTruncatedMvNormalRecursiveMomentsState)
-#     μ = Vector{Float64}(undef,d.n)
-#     for i in 1:d.n
-#         ee = zeros(Int,d.n)
-#         ee[i] = 1
-#         μ[i] = moment(d,ee)
-#     end
-#     μ
-# end
-
-# function cov(d::BoxTruncatedMvNormalRecursiveMomentsState)
-#     Σ = zeros(Float64,d.n,d.n)
-#     for i in 1:d.n, j in 1:d.n
-#         ee = zeros(Int,d.n)
-#         if i == j
-#             ee[i] = 2
-#         else
-#             ee[i], ee[j] = 1, 1
-#         end
-#         Σ[i,j] = moment(d,ee)
-#     end
-#     μ = mean(d)
-#     Σ-μ*μ'
-# end
-
-# function rand(d::BoxTruncatedMvNormalRecursiveMomentsState)
-#     rand(MvNormal(d.μₑ,d.Σₑ)) #TODO QQQQ
-# end
-
-
-# function pdf_nontruncated(d::BoxTruncatedMvNormalRecursiveMomentsState,x)
-#     d_nontruncated = MvNormal(d.μₑ,d.Σₑ)
-#     pdf(d_nontruncated,x)
-# end
 
 # Backend selector for the multivariate-Gaussian box probability that
 # bottoms out the Kan–Robotti recursion. `:hcubature` uses the
