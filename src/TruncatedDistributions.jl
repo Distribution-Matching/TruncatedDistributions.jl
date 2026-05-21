@@ -55,6 +55,7 @@ export
     hcubature_inf,
     set_kr_base_backend!,
     get_kr_base_backend,
+    warm_start_diagonal,
     loss_based_fit,
     truncateDynamicFit,
     moment_loss,
@@ -98,5 +99,6 @@ include("commonCompute.jl")
 
 include("parameterMatching/lossMultivariateFit.jl")
 include("parameterMatching/parameter_gradients_true_loss.jl")
+include("parameterMatching/warm_start.jl")
 
 end #module
