@@ -15,6 +15,16 @@
 # of U where U U^T = Σ^{-1}. Σ is therefore positive-definite by construction
 # for any choice of vec(U).
 
+"""
+    moment_loss(d::RecursiveMomentsBoxTruncatedMvNormal, μ̂, Σ̂)
+
+Scalar moment-matching loss
+`L = ½‖μA − μ̂‖² + ½‖ΣA − Σ̂‖²_F` evaluated against the cached primitive
+moments of `d` (so much cheaper than going through `mean(d)` / `cov(d)`,
+which would re-integrate). Returns a large finite penalty if the cache
+indicates `m^{(0)} → 0`, so an LBFGS line search backs off rather than
+freezing at `L = Inf`.
+"""
 function moment_loss(dist::RecursiveMomentsBoxTruncatedMvNormal,
                      μ̂::AbstractVector{Float64},
                      Σ̂::AbstractMatrix{Float64})
@@ -37,6 +47,15 @@ function moment_loss(dist::RecursiveMomentsBoxTruncatedMvNormal,
     return isfinite(L) ? L : prevfloat(Inf) / 4
 end
 
+"""
+    vector_moment_loss(param_vec, a, b, μ̂, Σ̂)
+
+The moment-matching loss as a function of the packed `(μ, U)` parameter
+vector. Useful for finite-difference cross-checks and for callers that
+don't hold a reusable Kan and Robotti tree state. Allocates a fresh
+distribution per call; for inner-loop use prefer the workspace-aware
+`vector_fg_true_loss!` (advanced internals).
+"""
 function vector_moment_loss(param_vec::Vector{Float64}, a, b,
                             μ̂::AbstractVector{Float64},
                             Σ̂::AbstractMatrix{Float64})

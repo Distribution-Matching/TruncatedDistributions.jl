@@ -1,5 +1,16 @@
 const Children = Union{Vector{Vector{Int}},Nothing}
 
+"""
+    BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistributionState
+
+Cached state for the recursive moment computation of a box-truncated
+multivariate normal. Holds the children-trees needed by the Kan and
+Robotti recursion, a dictionary of pre-allocated raw moments up to total
+order `max_moment_levels`, and the standard mean / covariance / truncation
+probability cache.
+
+Used by [`RecursiveMomentsBoxTruncatedMvNormal`](@ref) / [`TruncatedMvNormal`](@ref).
+"""
 mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistributionState
     d::MvNormal
     r::BoxTruncationRegion
@@ -75,13 +86,20 @@ mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistribut
     end
 end
 
-# In-place refresh of an existing tree state with a new (μ, Σ).
-# Topology (children_a, children_b lengths, dict keys, complement_idx, box
-# bounds) is invariant across LBFGS iterations on the same n / a / b /
-# max_moment_levels, so reusing the same state and just walking the tree to
-# rewrite the distribution-dependent data avoids the O(n!) tree
-# re-allocation in the constructor. This matters a lot at n ≥ 5: at n=6,
-# construction alone is ≥250 ms and ≥250 MB per call.
+"""
+    update_distribution!(s::BoxTruncatedMvNormalRecursiveMomentsState, μ, Σ)
+
+In-place refresh of an existing recursion-tree state with a new
+`(μ, Σ)`. The topology (children trees, dictionary keys, complement
+indices, box bounds) is invariant across `(μ, Σ)` updates on the same
+`n` / `a` / `b` / `max_moment_levels`, so reusing the state and just
+walking the tree to rewrite the distribution-dependent data avoids the
+`O(n!)` reconstruction cost — significant from `n ≥ 5`.
+
+Invalidates the cached `mean`, `cov`, `tp`, and raw moments; the next
+query recomputes from scratch. Pair with [`outer_dist_from_state`](@ref)
+to obtain a fresh outer distribution wrapper.
+"""
 function update_distribution!(s::BoxTruncatedMvNormalRecursiveMomentsState,
                               μₑ::AbstractVector{Float64},
                               Σₑ::AbstractMatrix{Float64})
@@ -108,20 +126,28 @@ function update_distribution!(s::BoxTruncatedMvNormalRecursiveMomentsState,
         end
     end
 
-    # Invalidate cached moments.
+    # Invalidate cached moments and their error bounds. Callers reading
+    # `mean(d)` / `cov(d)` / `tp(d)` will now trigger a fresh compute.
     for k in keys(s.rawMomentDict)
         s.rawMomentDict[k] = NaN
     end
     s.rawMomentsComputed = false
-    s.tp = NaN
+    s.tp     = NaN
+    s.tp_err = Inf
+    s.μ_err  = Inf
+    s.Σ_err  = Inf
     return s
 end
 
-# Build a lightweight outer `TruncatedMvDistribution` wrapper around an
-# already-refreshed state. The outer struct is immutable (and cheap — three
-# field references), so callers that hold a long-lived workspace state
-# rebuild this thin wrapper on each call. The expensive object (the state
-# tree) is reused.
+"""
+    outer_dist_from_state(state::BoxTruncatedMvNormalRecursiveMomentsState)
+
+Build a lightweight outer [`TruncatedMvDistribution`](@ref) wrapper around
+an already-refreshed state. The outer struct is immutable and cheap (three
+field references), so callers that hold a long-lived workspace state
+rebuild this thin wrapper on each call; the expensive recursion tree is
+reused.
+"""
 function outer_dist_from_state(state::BoxTruncatedMvNormalRecursiveMomentsState)
     return TruncatedMvDistribution(state.d, state.r, state)
 end
@@ -159,6 +185,13 @@ function init_dicts(n::Int,max_moment_levels::Int)
     md,td
 end
 
+"""
+    compute_moments(d::BoxTruncatedMvNormalRecursiveMomentsState)
+
+Walk the recursion tree and fill `d.rawMomentDict` with every primitive
+moment up to total order `d.max_moment_levels`. Cached afterwards;
+[`raw_moment`](@ref) reuses the result.
+"""
 function compute_moments(d::BoxTruncatedMvNormalRecursiveMomentsState)
     function compute_children_moments(d::BoxTruncatedMvNormalRecursiveMomentsState,baseKey::Vector{Int})
         isnothing(d.treeDict[baseKey]) && return  # recursion stopping criterion
@@ -227,11 +260,26 @@ function compute_moments(d::BoxTruncatedMvNormalRecursiveMomentsState)
     d.rawMomentsComputed = true
 end
 
-function raw_moment(d::BoxTruncatedMvNormalRecursiveMomentsState,k::AbstractVector{Int})
+"""
+    raw_moment(d, κ)
+
+Return the unnormalised moment integral
+`∫_{[a,b]} x_1^{κ_1} … x_n^{κ_n} φ(x; μ, Σ) dx` for the multi-index `κ`.
+Triggers [`compute_moments`](@ref) on the first call; subsequent calls hit
+the cache. Divide by `raw_moment(d, zeros(Int, length(d)))` to obtain the
+corresponding moment of the truncated distribution.
+"""
+function raw_moment(d::BoxTruncatedMvNormalRecursiveMomentsState, k::AbstractVector{Int})
     !d.rawMomentsComputed && compute_moments(d)
     return d.rawMomentDict[k]
 end
 
+"""
+    raw_moment_dict(d)
+
+Copy of the full raw-moment cache, keyed by multi-index `κ`. Useful when
+you need many moments at once and want to avoid repeated lookups.
+"""
 function raw_moment_dict(d::BoxTruncatedMvNormalRecursiveMomentsState)
     !d.rawMomentsComputed && compute_moments(d)
     return copy(d.rawMomentDict)
@@ -267,6 +315,13 @@ function set_kr_base_backend!(backend::Symbol)
     return prev
 end
 
+"""
+    get_kr_base_backend()
+
+Return the currently-selected base-case backend for the multivariate-normal
+box probability — either `:hcubature` or `:mvnormalcdf`. See
+[`set_kr_base_backend!`](@ref).
+"""
 get_kr_base_backend() = _KR_BASE_BACKEND[]
 
 function LL(d::BoxTruncatedMvNormalRecursiveMomentsState)

@@ -1,5 +1,9 @@
 # TruncatedDistributions.jl
 
+[![CI](https://github.com/Distribution-Matching/TruncatedDistributions.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/Distribution-Matching/TruncatedDistributions.jl/actions/workflows/CI.yml)
+[![Docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://Distribution-Matching.github.io/TruncatedDistributions.jl/stable/)
+[![Docs (dev)](https://img.shields.io/badge/docs-dev-blue.svg)](https://Distribution-Matching.github.io/TruncatedDistributions.jl/dev/)
+
 A Julia package for truncated multivariate distributions. The current
 functionality focuses on the **box-truncated multivariate normal**: a
 distribution object that exposes the usual `mean`, `cov`, `pdf`, `rand`,
@@ -42,7 +46,7 @@ package complements it with the multivariate case.
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/yoninazarathy/TruncatedDistributions.jl")
+Pkg.add(url = "https://github.com/Distribution-Matching/TruncatedDistributions.jl")
 ```
 
 Julia 1.10 or newer.

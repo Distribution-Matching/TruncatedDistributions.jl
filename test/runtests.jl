@@ -11,6 +11,7 @@ import TruncatedDistributions: hcubature_inf
 
     include("test_regions.jl")
     include("test_univariate.jl")
+    include("test_distribution_api.jl")
 
     @testset "hcubature_inf — closed-form integrals" begin
         atol = 1e-6

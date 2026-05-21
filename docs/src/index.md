@@ -1,58 +1,40 @@
-# TruncatedDistributions.jl Documentation
+# TruncatedDistributions.jl
 
-A Julia package for Truncated Distributions including multi-variate truncated distributions.
+A Julia package for truncated multivariate distributions. The current
+focus is the **box-truncated multivariate normal**: a first-class
+distribution object with `mean`, `cov`, `pdf`, `logpdf`, `rand`, plus
+arbitrary multivariate raw moments via the recursive moment formula of
+[Kan and Robotti (2017)](https://doi.org/10.1080/10618600.2017.1322092).
+A moment-matching parameter-fitting layer sits on top.
 
-For example:
+The type hierarchy (`TruncatedMvDistribution{D, R, S}`) is generic in the
+underlying distribution `D`, the truncation region `R`, and the cached
+state `S`, so the package is designed to grow to other multivariate
+families and other region types.
+
+For univariate truncation use `Distributions.truncated` from
+[Distributions.jl](https://github.com/JuliaStats/Distributions.jl); this
+package complements it with the multivariate case.
+
+## Installation
+
+```julia
+using Pkg
+Pkg.add(url = "https://github.com/Distribution-Matching/TruncatedDistributions.jl")
 ```
-julia> using TruncatedDistributions, PDMats
 
-julia> d = BasicBoxTruncatedMvNormal([2.3,4.3],PDMat([1.0 0.3; 0.3  2.4]),[-1.0, 0.5],[5.2,1.8]);
+Julia 1.10 or newer.
 
-julia> mean(d)
-2-element Vector{Float64}:
- 1.930922186217924
- 1.3227326677503652
-
-julia> d.state.μ_err
-3.457541323608117e-8
-```
-
+## Contents
 
 ```@contents
+Pages = ["quickstart.md", "fitting.md", "internals.md", "api.md"]
+Depth = 2
 ```
 
+## Citing
 
-## Specific Types
-
-```@docs
-BasicBoxTruncatedMvNormal
-RecursiveMomentsBoxTruncatedMvNormal
-```
-
-## Common Types
-
-The key type exposed by this package is `TruncatedMvDistribution`. It is parameterized by a `MultivariateDistribution` from [Distributions.jl](https://github.com/JuliaStats/Distributions.jl), a `TruncationRegion`, and an additional type called the `TruncatedMvDistributionState`.
-
-```@docs
-TruncatedMvDistribution
-TruncationRegion
-TruncatedMvDistributionState
-```
-
-## Functions
-
-```@docs
-TruncatedMvDistribution{D <: MultivariateDistribution, R <: TruncationRegion}
-```
-
-## Functions applied to `TruncatedMvDistribution`
-
-```@docs
-insupport
-```
-
-## Index
-
-```@index
-```
-
+If you use this package in published work, please cite Kan and Robotti
+(2017) for the recursive moment formula and the companion paper
+*Moment Matching of Box Truncated Multivariate Normal Distributions*
+for the fitting algorithms.

@@ -11,9 +11,9 @@ using MvNormalCDF
 using Printf
 using Random
 
-import Distributions: insupport, pdf, moment
+import Distributions: insupport, pdf, logpdf, moment, params
 import Base: size, length, show, rand
-import Statistics: mean, cov
+import Statistics: mean, cov, var, std, cor
 
 export
     # core types
@@ -25,14 +25,20 @@ export
     TruncatedMvDistributionSecondOrderState,
     BasicBoxTruncatedMvNormal,
     RecursiveMomentsBoxTruncatedMvNormal,
+    TruncatedMvNormal,
 
     # distribution queries
     intruncationregion,
     insupport,
     pdf,
+    logpdf,
     rand,
     mean,
     cov,
+    var,
+    std,
+    cor,
+    params,
     moment,
     moments,
     tp,

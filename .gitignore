@@ -1,2 +1,7 @@
 Manifest.toml
 develop/*
+docs/build/
+docs/site/
+*.cov
+lcov.info
+.DS_Store

@@ -36,6 +36,26 @@ struct TruncatedMvDistribution{D <: MultivariateDistribution,
     state::S
 end
 
+# Two-argument convenience constructor: build the state from the distribution
+# using `S(d)` (states that need extra config — like `max_moment_levels` —
+# expose richer constructors instead). The explicit `{D,R,S}` on the inner
+# call preserves the requested type parameters; without it, Julia would
+# narrow `D` to `typeof(d)` and the resulting object would no longer match
+# the `const` aliases (e.g. `BasicBoxTruncatedMvNormal`) that pin `D` at
+# the abstract `MvNormal`.
+function TruncatedMvDistribution{D,R,S}(d::D, r::R) where
+        {D <: MultivariateDistribution, R <: TruncationRegion, S <: TruncatedMvDistributionState}
+    return TruncatedMvDistribution{D,R,S}(d, r, S(d))
+end
+
+"""
+    TruncatedMvDistributionSecondOrderState <: TruncatedMvDistributionState
+
+Minimal cached state for a truncated multivariate distribution: stores
+the truncation probability, mean, covariance, and their error estimates.
+Used by [`BasicBoxTruncatedMvNormal`](@ref), where moments are computed
+by direct cubature on demand.
+"""
 mutable struct TruncatedMvDistributionSecondOrderState <: TruncatedMvDistributionState
     n::Int              # dimension
     tp::Float64         # truncation probability

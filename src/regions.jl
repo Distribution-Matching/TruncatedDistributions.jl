@@ -1,5 +1,8 @@
 """
-Truncation in a box between `a` and `b`.
+    BoxTruncationRegion(a, b)
+
+Axis-aligned box `{x : a ≤ x ≤ b}`. Either bound may be `±Inf` on any
+coordinate (half-infinite and doubly-infinite faces are supported).
 """
 struct BoxTruncationRegion <: TruncationRegion
     a::Vector{Float64}
@@ -9,7 +12,14 @@ end
 intruncationregion(r::BoxTruncationRegion, x::AbstractArray) = all(r.a .<= x) && all(x .<= r.b) 
 
 """
-An Elliptical Truncation region.
+    EllipticalTruncationRegion(H, h, c)
+
+Elliptical truncation region: the set `{x : (x − h)ᵀ H (x − h) ≤ c}`,
+where `H` is a positive-definite matrix.
+
+Currently the package exposes the region type and its membership predicate
+only; no full multivariate distribution is wired up against elliptical
+regions yet.
 """
 struct EllipticalTruncationRegion <: TruncationRegion
     H::PDMat
@@ -17,7 +27,11 @@ struct EllipticalTruncationRegion <: TruncationRegion
     c::Float64
 end
 
-intruncationregion(r::EllipticalTruncationRegion, x::AbstractArray) = (x-r.h)'*r.H*(x-r.h) <= r.c
+intruncationregion(r::EllipticalTruncationRegion, x::AbstractArray) = (x - r.h)' * r.H * (x - r.h) <= r.c
 
+"""
+    intruncationregion(region, x)
 
-abstract type PolytopeTruncationRegion <: TruncationRegion end
+`true` iff `x` lies inside the truncation region.
+"""
+intruncationregion
