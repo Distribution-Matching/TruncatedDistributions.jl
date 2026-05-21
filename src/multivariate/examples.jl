@@ -165,8 +165,15 @@ function _tridiag_corr(n::Int, ρ::Float64 = 0.3)
     return M
 end
 
-# Mild: box [-2, 2]^n  → univariate Φ(2)−Φ(−2) ≈ 0.954, mass ≈ 0.95^n
-# Heavy: box [-1, 1]^n → univariate Φ(1)−Φ(−1) ≈ 0.683, mass ≈ 0.68^n
+# Light: box [-2, 2]^n  → univariate Φ(2)−Φ(−2) ≈ 0.954, mass ≈ 0.95^n
+# Heavy: box [-1.5, 1.5]^n → univariate Φ(1.5)−Φ(−1.5) ≈ 0.866,
+#                            mass ≈ 0.87^n. At n=8 m^(0) ≈ 0.32, low
+#                            enough to be a meaningful heavy-truncation
+#                            case but not so low that the correlation
+#                            structure of the underlying Gaussian gets
+#                            washed out by the truncation (which would
+#                            make the warm-start globally optimal and
+#                            leave the BCD nothing to do).
 function _make_high_n_examples(n::Int)
     μ  = zeros(n)
     Σ  = _tridiag_corr(n)
@@ -176,7 +183,7 @@ function _make_high_n_examples(n::Int)
                       a = fill(-2.0, n), b = fill(2.0, n);
                       placeholders...),
         NormalExample(n = n, μ = μ, Σ = Σ,
-                      a = fill(-1.0, n), b = fill(1.0, n);
+                      a = fill(-1.5, n), b = fill(1.5, n);
                       placeholders...),
     ]
 end
@@ -184,6 +191,8 @@ end
 normal_examples[5]  = _make_high_n_examples(5)
 normal_examples[6]  = _make_high_n_examples(6)
 normal_examples[7]  = _make_high_n_examples(7)
-normal_examples[10] = []
+normal_examples[8]  = _make_high_n_examples(8)
+normal_examples[9]  = _make_high_n_examples(9)
+normal_examples[10] = _make_high_n_examples(10)
 normal_examples[20] = []
 normal_examples[50] = []

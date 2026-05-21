@@ -66,7 +66,9 @@ Arguments
                             and exact marginal-matching overshoots the
                             true joint optimum. `0.0` (default) disables
 
-Returns `(μ, Σ, hist)`.
+Returns `(μ, Σ, hist, picks)` where `picks` is a vector of
+`(k, S, accepted::Bool, score)` tuples — one per outer iteration —
+documenting what the block-selection heuristic actually did.
 """
 function block_coord_descent(μ̂::AbstractVector, Σ̂::AbstractMatrix,
                               a::AbstractVector, b::AbstractVector;
@@ -104,14 +106,15 @@ function block_coord_descent(μ̂::AbstractVector, Σ̂::AbstractMatrix,
         end
     end
 
-    hist = Float64[]
+    hist  = Float64[]
+    picks = Tuple{Int, Vector{Int}, Bool, Float64}[]
     L0 = _monitor_loss(μ, Σ, a, b, μ̂, Σ̂, monitor_full_loss, pool)
     push!(hist, L0)
     verbose && @info @sprintf("[BCD start] n=%d  candidates=%d  loss=%.3e  (%s)",
                               n, length(pool), L0,
                               monitor_full_loss ? "full" : "Σmarg")
     if L0 < ftarget
-        return μ, Σ, hist
+        return μ, Σ, hist, picks
     end
 
     # `tried_since_accept` accumulates blocks that have been rejected since
@@ -134,6 +137,7 @@ function block_coord_descent(μ̂::AbstractVector, Σ̂::AbstractMatrix,
         accepted = _block_update_marginal!(μ, Σ, S, a, b, μ̂, Σ̂,
                                             inner_iters, accept_by,
                                             proximal_λ)
+        push!(picks, (length(S), copy(S), accepted, score))
         if accepted
             empty!(tried_since_accept)
             push!(recent, S)
@@ -164,7 +168,7 @@ function block_coord_descent(μ̂::AbstractVector, Σ̂::AbstractMatrix,
             end
         end
     end
-    return μ, Σ, hist
+    return μ, Σ, hist, picks
 end
 
 _Sshort(S::Vector{Int}) = "[" * join(S, ",") * "]"
