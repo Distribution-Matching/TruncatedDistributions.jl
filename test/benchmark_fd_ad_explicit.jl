@@ -25,6 +25,9 @@ using TruncatedDistributions
 using HCubature, LinearAlgebra, PDMats, Printf
 using ForwardDiff
 using Optim
+using PRIMA
+using MvNormalCDF
+using Distributions: MvNormal
 
 # --------------------------------------------------------------------------
 # Generic HCubature-based loss (handles ForwardDiff.Dual inputs)
@@ -123,6 +126,15 @@ function fit_explicit_kr_fg(p0, a, b, μ̂, Σ̂)
     optimize(Optim.only_fg!(fg!), p0, LBFGS(), COMMON_OPTS)
 end
 
+# PRIMA NEWUOA — derivative-free trust-region method. Loss is the same
+# KR-based moment loss; the current set_kr_base_backend! choice (mvnormalcdf
+# by default in the benchmark) determines how moments are evaluated.
+function fit_prima(p0, a, b, μ̂, Σ̂)
+    f(p) = vector_moment_loss(p, a, b, μ̂, Matrix(Σ̂))
+    res, _ = newuoa(f, p0; ftarget = 1e-3, maxfun = 5000)
+    return res
+end
+
 # --------------------------------------------------------------------------
 # Run on the bundled 2D examples
 # --------------------------------------------------------------------------
@@ -135,22 +147,26 @@ function target(ne; digits::Int = 1)
     return d, μ̂, Σ̂
 end
 
+# m^{(0)} = P(X ∈ A), the truncation probability of the example.
+function m0(ne)
+    return mvnormcdf(MvNormal(collect(ne.μ), Matrix(ne.Σ)),
+                     collect(ne.a), collect(ne.b); m = 10_000)[1]
+end
+
 function run_one(label, ne)
     d, μ̂, Σ̂ = target(ne)
-    # `hcubature_inf` now handles ±Inf bounds via the standard
-    # tanh-style substitution, so HCubature and Kan–Robotti both see
-    # the example's true domain (no finite-cap workaround).
     a = collect(d.region.a); b = collect(d.region.b)
     p0 = make_param_vec_from_μ_Σ(μ̂, Σ̂)
     init = vector_moment_loss_hcub(p0, a, b, μ̂, Σ̂)
-    @printf("[%-22s] init=%.4e   ", label, init)
+    p_mass = m0(ne)
+    @printf("[%-22s] m0=%.3f init=%.4e   ", label, p_mass, init)
     flush(stdout)
 
     # FD
     try
         t = @elapsed (r = fit_fd(p0, a, b, μ̂, Σ̂))
         @printf("FD %.2fs(%.2e) ", t, r.minimum)
-    catch e
+    catch
         print("FD ERR ")
     end
     flush(stdout)
@@ -159,17 +175,8 @@ function run_one(label, ne)
     try
         t = @elapsed (r = fit_ad(p0, a, b, μ̂, Σ̂))
         @printf("AD %.2fs(%.2e) ", t, r.minimum)
-    catch e
+    catch
         print("AD ERR ")
-    end
-    flush(stdout)
-
-    # Explicit via Kan-Robotti
-    try
-        t = @elapsed (r = fit_explicit_kr(p0, a, b, μ̂, Σ̂))
-        @printf("EXP-KR %.2fs(%.2e) ", t, r.minimum)
-    catch e
-        print("EXP-KR ERR ")
     end
     flush(stdout)
 
@@ -179,7 +186,7 @@ function run_one(label, ne)
     try
         t = @elapsed (r = fit_explicit_kr_fg(p0, a, b, μ̂, Σ̂))
         @printf("EXP-KR-H %.2fs(%.2e) ", t, r.minimum)
-    catch e
+    catch
         print("EXP-KR-H ERR ")
     end
     flush(stdout)
@@ -190,17 +197,48 @@ function run_one(label, ne)
     set_kr_base_backend!(:mvnormalcdf)
     try
         t = @elapsed (r = fit_explicit_kr_fg(p0, a, b, μ̂, Σ̂))
-        @printf("EXP-KR-MVN %.2fs(%.2e)", t, r.minimum)
-    catch e
-        print("EXP-KR-MVN ERR")
+        @printf("EXP-KR-MVN %.2fs(%.2e) ", t, r.minimum)
+    catch
+        print("EXP-KR-MVN ERR ")
+    end
+    flush(stdout)
+
+    # PRIMA NEWUOA — derivative-free trust-region. Uses the same loss as
+    # EXP-KR-MVN (KR recursion with MvNormalCDF base) so the comparison
+    # measures optimizer cost, not integrator cost.
+    set_kr_base_backend!(:mvnormalcdf)
+    try
+        t = @elapsed (p_final = fit_prima(p0, a, b, μ̂, Σ̂))
+        L_final = vector_moment_loss(p_final, a, b, μ̂, Matrix(Σ̂))
+        @printf("PRIMA %.2fs(%.2e)", t, L_final)
+    catch
+        print("PRIMA ERR")
     end
     set_kr_base_backend!(:hcubature)  # restore default
     println()
 end
 
+# Single warmup invocation of every fit on the cheapest n=2 example so the
+# first timed row reports steady-state cost rather than JIT compile time.
+function warmup()
+    ne = get_example(n = 2, index = 4)
+    d, μ̂, Σ̂ = target(ne)
+    a = collect(d.region.a); b = collect(d.region.b)
+    p0 = make_param_vec_from_μ_Σ(μ̂, Σ̂)
+    for fit in (fit_fd, fit_ad, fit_explicit_kr_fg, fit_prima)
+        try; fit(p0, a, b, μ̂, Σ̂); catch; end
+    end
+    set_kr_base_backend!(:mvnormalcdf)
+    try; fit_explicit_kr_fg(p0, a, b, μ̂, Σ̂); catch; end
+    try; fit_prima(p0, a, b, μ̂, Σ̂); catch; end
+    set_kr_base_backend!(:hcubature)
+end
+
 if abspath(PROGRAM_FILE) == @__FILE__
-    println("# n=2,3,4 Gaussian benchmark: LBFGS with FD vs AD vs explicit-gradient")
-    println("# (all wall-clock includes JIT compilation on first call to that mode)")
+    println("# n=2,3,4 Gaussian benchmark: FD/AD/EXP-KR-H/EXP-KR-MVN/PRIMA")
+    println("# Warmup pass first; reported times are post-JIT.")
+    warmup()
+    println("# Warmup complete.")
     for n in [2, 3, 4]
         for i in 1:get_num_examples(n)
             ne = get_example(n = n, index = i)

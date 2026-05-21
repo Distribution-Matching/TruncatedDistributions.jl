@@ -108,7 +108,7 @@ normal_examples[2] = [
 ]
 normal_examples[3] = [
     NormalExample(  μ = [3.5,2,3.5],
-                    Σ = [ 7. 1 0 ; 
+                    Σ = [ 7. 1 0 ;
                           1 3.3 2  ;
                           0 2 3.8 ],
                     a = [-4. ,-3 ,-1],
@@ -117,7 +117,20 @@ normal_examples[3] = [
                     μ̂ = [3.1593375223480122, 1.8453845525318782, 3.3023816830081723],
                     Σ̂ =  [5.28031    0.719954  -0.0155715 ; 0.719954   2.8325     1.38021 ;-0.0155715  1.38021    2.71015],
                     arb_moment_to_check_index = (1, 1, 1),
-                    arb_moment_to_check_value = 11.740894033054031)
+                    arb_moment_to_check_value = 11.740894033054031),
+    # Semi-infinite 3D analogue of the Manjunath–Wilhelm 2D example: the
+    # third coordinate has an unbounded lower face (a[3] = -Inf), the other
+    # two faces are finite. Tests that the explicit-gradient + MvNormalCDF
+    # stack handles ±Inf bounds at n = 3.
+    NormalExample(  μ = [0.0, 0.0, 0.0],
+                    Σ = [1.0  0.3  0.0;
+                         0.3  1.0  0.3;
+                         0.0  0.3  1.0],
+                    a = [-1.0, -1.0, -Inf],
+                    b = [ 1.5,  1.5,  1.0],
+                    tp = NaN,
+                    μ̂  = zeros(3),
+                    Σ̂  = zeros(3, 3))
 ]
 normal_examples[4] = [
     NormalExample(  μ = [3.5,2,3.5,3.5],
@@ -133,7 +146,44 @@ normal_examples[4] = [
                     arb_moment_to_check_index = (2, 2, 2, 3),
                     arb_moment_to_check_value = 10550.695322644422)
 ]
-normal_examples[5] = []
+# --------------------------------------------------------------------------
+# Higher-dimensional examples (n = 5, 6, 7). One mildly-truncated and one
+# heavily-truncated box per dimension. μ = 0; Σ has unit diagonal and a
+# tridiagonal correlation band (Σ_{ij} = 0.3 for |i-j| = 1) so the
+# distribution is correlated but trivially positive-definite. Targets
+# `tp`, `μ̂`, `Σ̂` are placeholders — the benchmark computes the true
+# targets from each example's distribution and discards these fields.
+# --------------------------------------------------------------------------
+
+# Σ_{ij} = 1 if i=j, 0.3 if |i-j|=1, 0 otherwise — PD by diagonal dominance.
+function _tridiag_corr(n::Int, ρ::Float64 = 0.3)
+    M = Matrix{Float64}(I, n, n)
+    for i in 1:(n-1)
+        M[i, i+1] = ρ
+        M[i+1, i] = ρ
+    end
+    return M
+end
+
+# Mild: box [-2, 2]^n  → univariate Φ(2)−Φ(−2) ≈ 0.954, mass ≈ 0.95^n
+# Heavy: box [-1, 1]^n → univariate Φ(1)−Φ(−1) ≈ 0.683, mass ≈ 0.68^n
+function _make_high_n_examples(n::Int)
+    μ  = zeros(n)
+    Σ  = _tridiag_corr(n)
+    placeholders = (tp = NaN, μ̂ = zeros(n), Σ̂ = zeros(n, n))
+    return [
+        NormalExample(n = n, μ = μ, Σ = Σ,
+                      a = fill(-2.0, n), b = fill(2.0, n);
+                      placeholders...),
+        NormalExample(n = n, μ = μ, Σ = Σ,
+                      a = fill(-1.0, n), b = fill(1.0, n);
+                      placeholders...),
+    ]
+end
+
+normal_examples[5]  = _make_high_n_examples(5)
+normal_examples[6]  = _make_high_n_examples(6)
+normal_examples[7]  = _make_high_n_examples(7)
 normal_examples[10] = []
 normal_examples[20] = []
 normal_examples[50] = []
