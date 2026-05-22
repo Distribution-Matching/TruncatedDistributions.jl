@@ -256,4 +256,5 @@ live under `test/experiments/`; see the README there.
   used by the optional `:mvnormalcdf` backend.)
 - The joint-LBFGS and hybrid-BCD fitting algorithms are described in the
   companion paper *Moment Matching of Box Truncated Multivariate Normal
-  Distributions* (Carrizo, Draidi, Nazarathy).
+  Distributions* (Carrizo Molina, Draidi, Nazarathy — listed in
+  alphabetical order).
