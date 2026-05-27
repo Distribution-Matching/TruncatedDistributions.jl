@@ -130,6 +130,19 @@ normal_examples[3] = [
                     b = [ 1.5,  1.5,  1.0],
                     tp = NaN,
                     μ̂  = zeros(3),
+                    Σ̂  = zeros(3, 3)),
+    # Genz & Bretz (2009), Computation of Multivariate Normal and t
+    # Probabilities, §1.3.1 (Φ3ex). Trivariate centred normal, upper-tailed
+    # semi-infinite truncation. The reported true probability is
+    # 0.827984897456834.
+    NormalExample(  μ = [0.0, 0.0, 0.0],
+                    Σ = [1.0    3/5    1/3 ;
+                         3/5    1.0   11/15;
+                         1/3   11/15   1.0],
+                    a = [-Inf, -Inf, -Inf],
+                    b = [ 1.0,  4.0,  2.0],
+                    tp = 0.827984897456834,
+                    μ̂  = zeros(3),
                     Σ̂  = zeros(3, 3))
 ]
 normal_examples[4] = [
@@ -188,10 +201,44 @@ function _make_high_n_examples(n::Int)
     ]
 end
 
-normal_examples[5]  = _make_high_n_examples(5)
+# Σ_{ij} = min(i, j) — staircase covariance from Genz & Bretz (2009),
+# §1.3.2 and §1.3.3. Positive-definite for all n (Cholesky factor is
+# the lower-triangular all-ones matrix scaled per row).
+function _staircase_cov(n::Int)
+    M = zeros(n, n)
+    for i in 1:n, j in 1:n
+        M[i, j] = float(min(i, j))
+    end
+    return M
+end
+
+# Genz & Bretz (2009), §1.3.2: Φ5ex. Pentavariate normal with staircase
+# covariance and hyper-rectangle reported in the book as a "lower"
+# vector (-1,...,-5) and an "upper" vector (2,...,6). The book's
+# notation pairs the leftmost integral sign with the leftmost dx
+# (i.e., dx_5), so a[1] in our `x_1`-indexed convention is the
+# REVERSAL of the book's listed values: a = (-5,-4,-3,-2,-1),
+# b = (6,5,4,3,2). Reported true probability ≈ 0.4741284.
+const _genz_phi5 = NormalExample(n = 5, μ = zeros(5),
+    Σ = _staircase_cov(5),
+    a = [-5.0, -4.0, -3.0, -2.0, -1.0],
+    b = [ 6.0,  5.0,  4.0,  3.0,  2.0],
+    tp = 0.4741284, μ̂ = zeros(5), Σ̂ = zeros(5, 5))
+
+# Genz & Bretz (2009), §1.3.3: Φ8ex. Octavariate analogue with the
+# same staircase covariance; the same bound-order convention applies,
+# so a = (-8,...,-1), b = (9,...,2). Reported true
+# probability ≈ 0.32395.
+const _genz_phi8 = NormalExample(n = 8, μ = zeros(8),
+    Σ = _staircase_cov(8),
+    a = collect(-8.0:1.0:-1.0),
+    b = collect( 9.0:-1.0: 2.0),
+    tp = 0.32395, μ̂ = zeros(8), Σ̂ = zeros(8, 8))
+
+normal_examples[5]  = vcat(_make_high_n_examples(5), [_genz_phi5])
 normal_examples[6]  = _make_high_n_examples(6)
 normal_examples[7]  = _make_high_n_examples(7)
-normal_examples[8]  = _make_high_n_examples(8)
+normal_examples[8]  = vcat(_make_high_n_examples(8), [_genz_phi8])
 normal_examples[9]  = _make_high_n_examples(9)
 normal_examples[10] = _make_high_n_examples(10)
 normal_examples[20] = []
