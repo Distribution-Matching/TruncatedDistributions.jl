@@ -59,5 +59,5 @@ moment_loss(d, μ̂, Σ̂)              # scalar loss read off the cached moment
 ```
 
 See [Moment Matching of Box Truncated Multivariate Normal
-Distributions](https://github.com/Distribution-Matching/paper_truncated_mv_normal)
+Distributions](https://github.com/Distribution-Matching/paper-truncated-mv-normal)
 for the derivation of the algorithms.
