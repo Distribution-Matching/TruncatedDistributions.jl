@@ -242,8 +242,9 @@ The unit suite covers regions, the 1D moment recurrence, the multivariate
 recursion cross-checked against direct cubature, gradient correctness, and
 the `fit_mvnormal` end-to-end recovery.
 
-Long-running experiment scripts (the data behind the companion paper)
-live under `test/experiments/`; see the README there.
+Long-running benchmark scripts for the companion paper live in a
+separate repository:
+<https://github.com/Distribution-Matching/numerical-examples-for-moment-matching-of-truncated-multivariate-normals>.
 
 ## References
 
@@ -256,5 +257,4 @@ live under `test/experiments/`; see the README there.
   used by the optional `:mvnormalcdf` backend.)
 - The joint-LBFGS and hybrid-BCD fitting algorithms are described in the
   companion paper *Moment Matching of Box Truncated Multivariate Normal
-  Distributions* (Carrizo Molina, Draidi, Nazarathy — listed in
-  alphabetical order).
+  Distributions* (Carrizo Molina & Nazarathy).
