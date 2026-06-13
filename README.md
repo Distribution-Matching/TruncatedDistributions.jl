@@ -4,21 +4,23 @@
 [![Docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://Distribution-Matching.github.io/TruncatedDistributions.jl/stable/)
 [![Docs (dev)](https://img.shields.io/badge/docs-dev-blue.svg)](https://Distribution-Matching.github.io/TruncatedDistributions.jl/dev/)
 
-A Julia package for truncated multivariate distributions. The current
-functionality focuses on the **box-truncated multivariate normal**: a
+A Julia package for truncated distributions, providing functionality beyond
+what is in [Distributions.jl](https://github.com/JuliaStats/Distributions.jl)
+(whose `truncated` already covers basic univariate truncation).
+
+Its main functionality is the **box-truncated multivariate normal**: a
 distribution object that exposes the usual `mean`, `cov`, `pdf`, `rand`,
 plus arbitrary raw moments via the recursive moment formula of
 [Kan and Robotti (2017)](https://doi.org/10.1080/10618600.2017.1322092).
 On top of that sits an optional moment-matching parameter-fitting layer.
-
 The type hierarchy (`TruncatedMvDistribution{D, R, S}`) is generic in the
 underlying distribution `D`, the truncation region `R`, and the cached
 state `S`, so the package is designed to grow to other multivariate
 families and other region types.
 
-For univariate truncation use `Distributions.truncated` from
-[Distributions.jl](https://github.com/JuliaStats/Distributions.jl); this
-package complements it with the multivariate case.
+The package also ships specialized **univariate tools** (see below) — currently
+a dynamic, ODE-based moment matcher — addressing problems that
+`Distributions.truncated` does not.
 
 ## Features
 
