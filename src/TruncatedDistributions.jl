@@ -6,6 +6,9 @@ using LinearAlgebra
 using PDMats
 using Parameters
 using Optim
+using ADTypes: AutoForwardDiff
+using NLSolversBase: only_fg!   # Optim 2 no longer re-exports only_fg!
+import ForwardDiff   # loads the DifferentiationInterface backend used by AutoForwardDiff under Optim 2
 using Combinatorics
 using MvNormalCDF
 using Printf

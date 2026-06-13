@@ -318,7 +318,7 @@ function _block_update_marginal!(μ::Vector{Float64}, Σ::Matrix{Float64},
                              time_limit = 30.0,
                              show_trace = false)
         res = try
-            optimize(Optim.only_fg!(fg!), p0, LBFGS(), opts)
+            optimize(only_fg!(fg!), p0, LBFGS(), opts)
         catch
             return false
         end
@@ -377,7 +377,7 @@ function _block_update_1d(μ0::Real, σ²0::Real,
     p0  = [Float64(μ0), log(max(σ²0, eps()))]
     res = optimize(f, p0, LBFGS(),
                    Optim.Options(iterations = iters);
-                   autodiff = :forward)
+                   autodiff = AutoForwardDiff())
     return res.minimizer[1], exp(res.minimizer[2])
 end
 
