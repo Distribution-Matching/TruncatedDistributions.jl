@@ -42,7 +42,7 @@ function warm_start_diagonal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
         p0  = [μ̂i, log(max(Σ̂ii, eps()))]
         res = optimize(f, p0, LBFGS(),
                        Optim.Options(iterations = iters);
-                       autodiff = :forward)
+                       autodiff = AutoForwardDiff())
         μ_ws[i]  = res.minimizer[1]
         σ²_ws[i] = exp(res.minimizer[2])
     end

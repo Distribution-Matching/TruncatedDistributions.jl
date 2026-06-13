@@ -3,6 +3,7 @@ using Test
 using Distributions
 using PDMats
 using LinearAlgebra
+using Random
 using SpecialFunctions: erf
 
 import TruncatedDistributions: hcubature_inf

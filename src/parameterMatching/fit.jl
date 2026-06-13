@@ -136,8 +136,8 @@ function _fit_mvnormal_lbfgs(μ̂::Vector{Float64}, Σ̂::Matrix{Float64},
     opts = Optim.Options(show_trace = verbose,
                          iterations = iterations,
                          time_limit = time_limit,
-                         callback = s -> s.value < ftarget)
-    t = @elapsed res = optimize(Optim.only_fg!(fg!), p0, LBFGS(), opts)
+                         callback = s -> s.f_x < ftarget)   # Optim 2 renamed the state's value field to f_x
+    t = @elapsed res = optimize(only_fg!(fg!), p0, LBFGS(), opts)
     μ_fit, Σ_fit = make_μ_Σ_from_param_vec(res.minimizer)
     info = (; method = :lbfgs,
               loss = res.minimum,
