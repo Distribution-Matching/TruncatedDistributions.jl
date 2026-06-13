@@ -1,7 +1,10 @@
 # TruncatedDistributions.jl
 
-A Julia package for truncated multivariate distributions. The current
-focus is the **box-truncated multivariate normal**: a first-class
+A Julia package for truncated distributions, providing functionality beyond
+what is in [Distributions.jl](https://github.com/JuliaStats/Distributions.jl)
+(whose `truncated` already covers basic univariate truncation).
+
+Its main focus is the **box-truncated multivariate normal**: a first-class
 distribution object with `mean`, `cov`, `pdf`, `logpdf`, `rand`, plus
 arbitrary multivariate raw moments via the recursive moment formula of
 [Kan and Robotti (2017)](https://doi.org/10.1080/10618600.2017.1322092).
@@ -12,9 +15,9 @@ underlying distribution `D`, the truncation region `R`, and the cached
 state `S`, so the package is designed to grow to other multivariate
 families and other region types.
 
-For univariate truncation use `Distributions.truncated` from
-[Distributions.jl](https://github.com/JuliaStats/Distributions.jl); this
-package complements it with the multivariate case.
+The package also provides specialized **univariate tools** (see
+[Univariate tools](tools.md)) — currently a dynamic, ODE-based moment
+matcher — addressing problems that `Distributions.truncated` does not.
 
 ## Installation
 
@@ -28,7 +31,7 @@ Julia 1.10 or newer.
 ## Contents
 
 ```@contents
-Pages = ["quickstart.md", "fitting.md", "internals.md", "api.md"]
+Pages = ["quickstart.md", "fitting.md", "tools.md", "internals.md", "api.md"]
 Depth = 2
 ```
 
