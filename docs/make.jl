@@ -17,6 +17,7 @@ makedocs(
         "Home"                => "index.md",
         "Quick start"         => "quickstart.md",
         "Moment matching"     => "fitting.md",
+        "Univariate tools"    => "tools.md",
         "Internals"           => "internals.md",
         "API reference"       => "api.md",
     ],

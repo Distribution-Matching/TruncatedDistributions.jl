@@ -88,7 +88,13 @@ export
     get_example,
     get_num_examples,
     get_example_sizes,
-    dist_from_example
+    dist_from_example,
+
+    # univariate tools — dynamic (ODE) moment matching
+    dynamic_fit_locationscale,
+    dynamic_fit_exponential,
+    DynamicMomentMatch,
+    solution
 
 include("commonTypes.jl")
 include("regions.jl")
@@ -105,5 +111,6 @@ include("parameterMatching/parameter_gradients_true_loss.jl")
 include("parameterMatching/warm_start.jl")
 include("parameterMatching/block_coord_descent.jl")
 include("parameterMatching/fit.jl")
+include("tools/dynamic_moment_matching.jl")
 
 end # module
