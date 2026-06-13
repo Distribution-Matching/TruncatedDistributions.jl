@@ -67,6 +67,15 @@ moment_loss
 vector_moment_loss
 ```
 
+## Univariate tools — dynamic moment matching
+
+```@docs
+dynamic_fit_locationscale
+dynamic_fit_exponential
+DynamicMomentMatch
+solution
+```
+
 ## Bundled examples
 
 ```@docs

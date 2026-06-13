@@ -41,6 +41,9 @@ package complements it with the multivariate case.
   `(μ, Σ)` whose box-truncation has the requested moments. Picks joint
   LBFGS + warm-start for small problems and a hybrid block-coordinate
   solver for larger ones.
+- Univariate tools: a dynamic (ODE-based) moment-matcher for one-dimensional
+  truncated distributions — `dynamic_fit_locationscale` and
+  `dynamic_fit_exponential` — implementing Liquet and Nazarathy (2015).
 
 ## Installation
 
@@ -221,6 +224,42 @@ block_coord_descent(μ̂, Σ̂, a, b)   # underlying BCD; returns (μ, Σ, hist,
 moment_loss(d, μ̂, Σ̂)              # scalar loss read off the cached moments
 ```
 
+## Univariate tools: dynamic moment matching
+
+Separate from the multivariate machinery, the package provides a univariate
+**dynamic moment-matching** tool, implementing Liquet and Nazarathy (2015). To
+match the moments of a distribution truncated to `[a, b]`, it follows a homotopy:
+starting from the (explicit) untruncated solution, it integrates an ODE for the
+parameters that holds the target moments fixed while the truncation interval
+shrinks down to `[a, b]`. One solve yields the answer *and* the whole trajectory
+of solutions for every intermediate interval.
+
+```julia
+# Location-scale family (any symmetric kernel; default Normal).
+# Find (location, scale) whose truncation to [-0.9, 1.35] has mean 0.1, sd 0.6:
+r = dynamic_fit_locationscale(0.1, 0.6, -0.9, 1.35)
+solution(r)            # ≈ [-0.20604, 1.12262]
+
+# Any symmetric kernel works (default Normal). Laplace, Logistic, Student-t, …:
+using Distributions
+r = dynamic_fit_locationscale(0.2, 1.0, -1.0, 3.0; kernel = Laplace())
+r = dynamic_fit_locationscale(0.2, 1.0, -1.0, 3.0; kernel = TDist(5), epsilon = 1e-3)
+
+# Exponential family on [0, b] — a non location-scale family, so a separate path.
+# Find the rate whose truncation to [0, 5] has mean 2.4 (feasible since mean < b/2):
+r = dynamic_fit_exponential(2.4, 5.0)
+solution(r)            # ≈ [0.048046]
+```
+
+Light-tailed kernels (Normal, Laplace, Logistic) recover to ~1e-9; heavier tails
+(Student-t with small degrees of freedom) need a smaller `epsilon`.
+
+Both reproduce the worked examples (Figs. 1–2) of the paper. Pass `save_z` to
+record the parameter trajectory for plotting. The integration is a built-in
+fixed-step RK4 (no external ODE-solver dependency); see the docs for details,
+including a note on a typo in the paper's printed coefficients that this code
+corrects.
+
 ## Bundled examples
 
 A small library of pre-defined cases for testing and benchmarking:
@@ -258,3 +297,7 @@ separate repository:
 - The joint-LBFGS and hybrid-BCD fitting algorithms are described in the
   companion paper *Moment Matching of Box Truncated Multivariate Normal
   Distributions* (Carrizo Molina & Nazarathy).
+- Liquet, B. and Nazarathy, Y. (2015). "A dynamic view to moment matching of
+  truncated distributions." *Statistics & Probability Letters*, 104, 87–93.
+  https://doi.org/10.1016/j.spl.2015.05.006 (the univariate dynamic
+  moment-matching tool).
