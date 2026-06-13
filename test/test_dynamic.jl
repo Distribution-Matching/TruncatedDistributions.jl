@@ -49,6 +49,37 @@
         end
     end
 
+    @testset "Location-scale with non-normal kernels" begin
+        # Truncated mean/std of the family (kernel, loc0, scale0) on [a,b], computed
+        # self-consistently by quadrature of pdf(kernel,(x-loc0)/scale0)/scale0.
+        function _trunc_moments(kernel, loc0, scale0, a, b)
+            f(x) = pdf(kernel, (x - loc0) / scale0) / scale0
+            Z  = hcubature_inf(x -> f(x[1]),          [a], [b]; rtol = 1e-10, maxevals = 10^7)[1]
+            m1 = hcubature_inf(x -> x[1] * f(x[1]),   [a], [b]; rtol = 1e-10, maxevals = 10^7)[1] / Z
+            m2 = hcubature_inf(x -> x[1]^2 * f(x[1]), [a], [b]; rtol = 1e-10, maxevals = 10^7)[1] / Z
+            return m1, sqrt(m2 - m1^2)
+        end
+        function _check(kernel, loc0, scale0, a, b; epsilon = 0.01, nsteps = 200_000, atol = 1e-6)
+            μt, σt = _trunc_moments(kernel, loc0, scale0, a, b)
+            r = dynamic_fit_locationscale(μt, σt, a, b;
+                                          kernel = kernel, epsilon = epsilon, nsteps = nsteps)
+            loc, scale = solution(r)
+            @test loc   ≈ loc0   atol = atol
+            @test scale ≈ scale0 atol = atol
+        end
+        # Laplace (kinked density at the location) and Logistic recover as tightly
+        # as the normal at the default epsilon.
+        _check(Laplace(),   0.3, 1.2, -1.0, 3.0)
+        _check(Laplace(),  -0.2, 0.8, -2.0, 2.0)
+        _check(Logistic(), -0.2, 0.8, -2.0, 2.0)
+        _check(Logistic(),  0.5, 1.0, -1.5, 3.0)
+        # Student-t (finite variance needs ν > 2). Heavier tails need a smaller
+        # epsilon so the homotopy starts from a wide enough interval.
+        _check(TDist(5), 0.3, 1.2, -1.0, 3.0; epsilon = 0.001,  atol = 1e-5)
+        _check(TDist(5), 0.0, 1.0, -2.0, 2.5; epsilon = 0.001,  atol = 1e-5)
+        _check(TDist(4), -0.2, 0.9, -2.0, 2.0; epsilon = 0.0005, nsteps = 300_000, atol = 1e-4)
+    end
+
     @testset "trajectory + show" begin
         r = dynamic_fit_locationscale(0.0, 1.0, -2.0, 2.0; save_z = range(0.05, 1.0; length = 10))
         @test length(r.z) == length(r.params)

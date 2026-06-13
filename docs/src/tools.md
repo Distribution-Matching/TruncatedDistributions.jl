@@ -55,6 +55,31 @@ solution(r)        # ≈ [-0.20604, 1.12262]; the paper reports (-0.20606, 1.122
 (request intermediate points with `save_z`), so you can plot the trajectory as in
 the paper.
 
+#### Other kernels
+
+The `kernel` may be any symmetric continuous distribution from
+[Distributions.jl](https://github.com/JuliaStats/Distributions.jl) — e.g. a
+Laplace (double-exponential) or a Student-t base:
+
+```julia
+using TruncatedDistributions, Distributions
+
+# Laplace kernel (its density has a kink at the location — handled fine)
+r = dynamic_fit_locationscale(0.2, 1.0, -1.0, 3.0; kernel = Laplace())
+
+# Student-t with 5 degrees of freedom. Heavier tails ⇒ use a smaller `epsilon`
+# so the homotopy starts from a wide enough interval. (Needs ν > 2 for a finite
+# kernel variance.)
+r = dynamic_fit_locationscale(0.2, 1.0, -1.0, 3.0; kernel = TDist(5), epsilon = 1e-3)
+```
+
+Accuracy depends on the tail weight. Light-tailed kernels (Normal, Laplace,
+Logistic) recover the parameters to ``\sim 10^{-9}`` at the default `epsilon`;
+Student-t with moderate degrees of freedom needs a smaller `epsilon` (``\nu=5``
+reaches ``\sim 10^{-8}`` at `epsilon = 1e-3`), and very heavy tails (``\nu=3``)
+remain limited because the initial, near-untruncated moment match is itself only
+approached slowly as the interval opens.
+
 ### Exponential family
 
 The exponential is a one-parameter, *non* location-scale family, so it follows a

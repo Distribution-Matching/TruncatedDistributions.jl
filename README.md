@@ -240,11 +240,19 @@ of solutions for every intermediate interval.
 r = dynamic_fit_locationscale(0.1, 0.6, -0.9, 1.35)
 solution(r)            # ≈ [-0.20604, 1.12262]
 
+# Any symmetric kernel works (default Normal). Laplace, Logistic, Student-t, …:
+using Distributions
+r = dynamic_fit_locationscale(0.2, 1.0, -1.0, 3.0; kernel = Laplace())
+r = dynamic_fit_locationscale(0.2, 1.0, -1.0, 3.0; kernel = TDist(5), epsilon = 1e-3)
+
 # Exponential family on [0, b] — a non location-scale family, so a separate path.
 # Find the rate whose truncation to [0, 5] has mean 2.4 (feasible since mean < b/2):
 r = dynamic_fit_exponential(2.4, 5.0)
 solution(r)            # ≈ [0.048046]
 ```
+
+Light-tailed kernels (Normal, Laplace, Logistic) recover to ~1e-9; heavier tails
+(Student-t with small degrees of freedom) need a smaller `epsilon`.
 
 Both reproduce the worked examples (Figs. 1–2) of the paper. Pass `save_z` to
 record the parameter trajectory for plotting. The integration is a built-in
