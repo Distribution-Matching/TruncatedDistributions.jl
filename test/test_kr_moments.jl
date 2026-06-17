@@ -91,3 +91,37 @@ end
         end
     end
 end
+
+# Guard on the user-facing raw_moment: requesting a moment beyond the cached
+# order (or a malformed multi-index) should fail with a clear, actionable
+# message rather than a bare KeyError. `moment(d, k)` (direct cubature) must
+# still work for any order, since it bypasses the KR cache entirely.
+@testset "raw_moment over-order / malformed-index guard" begin
+    μ = [0.3, -0.2]
+    Σ = [1.0 0.3; 0.3 1.0]
+    a = [-1.0, -1.0]; b = [1.0, 1.0]
+    d = TruncatedMvNormal(μ, Σ, a, b; max_moment_levels = 2)
+
+    # In-range still works.
+    @test isfinite(raw_moment(d, [1, 1]))
+    @test isfinite(raw_moment(d, [2, 0]))
+
+    # Over-order: total order 6 > max_moment_levels = 2.
+    @test_throws ArgumentError raw_moment(d, [1, 2])  # |κ| = 3
+    err = try
+        raw_moment(d, [3, 3])
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("max_moment_levels", err.msg)
+
+    # Malformed: wrong length, negative entry.
+    @test_throws DimensionMismatch raw_moment(d, [1, 1, 1])
+    @test_throws ArgumentError raw_moment(d, [-1, 0])
+
+    # The direct (uncached) path still works for any order.
+    @test isfinite(moment(d, [1, 2]))
+    @test isfinite(moment(d, [3, 3]))
+end
