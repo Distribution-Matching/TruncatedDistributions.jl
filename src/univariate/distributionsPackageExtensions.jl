@@ -21,9 +21,14 @@ function moments(d::Truncated{Normal{T},Continuous}, k::Int) where T
     pars = params(d)
     μ, σ, σ² =pars[1], pars[2], pars[2]^2
     L, U = pars[3], pars[4]
-    zL, zU = (L - μ)/σ, (U - μ)/σ 
+    zL, zU = (L - μ)/σ, (U - μ)/σ
     ϕL, ϕU = pdf.(Normal(),(zL, zU))
-    ΦUL = cdf(Normal(),zU) - cdf(Normal(),zL)
+    # P(L ≤ X ≤ U) for the untruncated normal. Use the truncation mass
+    # that Distributions.jl computed stably (log-space differencing)
+    # rather than the naive cdf difference, which cancels to exactly 0
+    # for deep-tail boxes (e.g. both bounds 20σ out) and turns the
+    # boundary correction below into ±Inf.
+    ΦUL = d.tp
     for i in 3:(k+2)
         kk = i-2
         # Boundary contributions: U^{kk-1} ϕU and L^{kk-1} ϕL. If a bound is

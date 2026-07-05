@@ -40,6 +40,23 @@ yourself or watch issue #7.
                       30 for BCD).
 * `verbose`         — print one line per iteration.
 
+# BCD-specific keyword arguments
+
+* `bcd_block_sizes`, `bcd_inner_iters`, `bcd_accept_by`,
+  `bcd_selection`, `bcd_softmax_T` — passed through to
+  `block_coord_descent`.
+* `bcd_polish` — run a short joint LBFGS polish from the BCD endpoint
+  when the full n-dim loss is still above `ftarget` (default `false`;
+  each polish iteration costs one full-dimension Kan–Robotti gradient
+  call, affordable up to n ≈ 6).
+* `bcd_polish_iterations` — iteration cap for the polish (default 10).
+
+Note on `info.loss` for the BCD path: with `bcd_accept_by = :full` or
+after a polish it is the full n-dim loss; with `bcd_accept_by =
+:marginal` and no polish it is the BCD's marginal-loss monitor (sum of
+block-marginal residuals), a proxy that never requires a
+full-dimension call.
+
 # Returns
 
 `(μ, Σ, info)`. The `info` NamedTuple has at least
@@ -78,7 +95,9 @@ function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
                      bcd_inner_iters::Int = 10,
                      bcd_accept_by::Symbol = :marginal,
                      bcd_selection::Symbol = :softmax,
-                     bcd_softmax_T::Float64 = 1.0)
+                     bcd_softmax_T::Float64 = 1.0,
+                     bcd_polish::Bool = false,
+                     bcd_polish_iterations::Int = 10)
     n = length(μ̂)
     size(Σ̂) == (n, n) ||
         throw(DimensionMismatch("Σ̂ must be $(n)×$(n); got $(size(Σ̂))"))
@@ -120,7 +139,10 @@ function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
                                  inner_iters = bcd_inner_iters,
                                  accept_by = bcd_accept_by,
                                  selection = bcd_selection,
-                                 softmax_T = bcd_softmax_T)
+                                 softmax_T = bcd_softmax_T,
+                                 polish = bcd_polish,
+                                 polish_iterations = bcd_polish_iterations,
+                                 time_limit = time_limit)
     end
 end
 
@@ -157,9 +179,18 @@ function _fit_mvnormal_bcd(μ̂::Vector{Float64}, Σ̂::Matrix{Float64},
                            inner_iters::Int,
                            accept_by::Symbol,
                            selection::Symbol,
-                           softmax_T::Float64)
-    # `time_limit` is honoured by BCD via the inner per-iteration cap of
-    # `bcd_inner_iters`. The outer cap is `iterations`.
+                           softmax_T::Float64,
+                           polish::Bool = false,
+                           polish_iterations::Int = 10,
+                           time_limit::Float64 = 60.0)
+    # `time_limit` is honoured by the BCD phase via the inner
+    # per-iteration cap of `bcd_inner_iters` (outer cap `iterations`);
+    # the optional polish phase honours it directly.
+    # Monitoring matches the acceptance gate: with :full acceptance the
+    # full n-dim loss is already computed every iteration, so it is also
+    # the stopping criterion and the reported loss. With :marginal
+    # acceptance the monitor is the sum of block-marginal residuals — a
+    # proxy that never requires a full-dimension call.
     t = @elapsed begin
         μ_fit, Σ_fit, hist, picks = block_coord_descent(
             μ̂, Σ̂, a, b;
@@ -168,17 +199,52 @@ function _fit_mvnormal_bcd(μ̂::Vector{Float64}, Σ̂::Matrix{Float64},
             max_iters = iterations,
             inner_iters = inner_iters,
             ftarget = ftarget,
-            monitor_full_loss = false,
+            monitor_full_loss = (accept_by === :full),
             accept_by = accept_by,
             selection = selection,
             softmax_T = softmax_T,
             verbose = verbose)
     end
+    loss_bcd = isempty(hist) ? NaN : hist[end]
+
+    # Optional joint L-BFGS polish from the BCD endpoint. This is the
+    # final step of Algorithm 2 in the paper: the BCD phase (with
+    # marginal acceptance) drives a marginal-loss proxy, and the polish
+    # closes the gap to the full n-dimensional loss. Feasible only where
+    # a full-dimension Kan–Robotti gradient call is affordable.
+    polished = false
+    loss_full_before_polish = NaN
+    if polish
+        t_polish = @elapsed begin
+            loss_full_before_polish = _full_moment_loss(μ_fit, Σ_fit,
+                                                        a, b, μ̂, Σ̂)
+            if loss_full_before_polish >= ftarget
+                μ_fit, Σ_fit_sym, info_polish =
+                    _fit_mvnormal_lbfgs(μ̂, Σ̂, a, b,
+                                        μ_fit, Matrix(Σ_fit);
+                                        ftarget = ftarget,
+                                        time_limit = time_limit,
+                                        iterations = polish_iterations,
+                                        verbose = verbose)
+                Σ_fit = Matrix(Σ_fit_sym)
+                loss_bcd = info_polish.loss
+                polished = true
+            else
+                # Polish unnecessary; the full loss was computed to decide
+                # that, so report it rather than the marginal proxy.
+                loss_bcd = loss_full_before_polish
+            end
+        end
+        t += t_polish
+    end
+
     info = (; method = :bcd,
-              loss = isempty(hist) ? NaN : hist[end],
+              loss = loss_bcd,
               time = t,
               iterations = length(picks),
               hist = hist,
-              picks = picks)
+              picks = picks,
+              polished = polished,
+              loss_before_polish = loss_full_before_polish)
     return μ_fit, Symmetric(Σ_fit), info
 end

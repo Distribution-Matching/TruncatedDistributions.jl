@@ -5,6 +5,43 @@ All notable changes to this project are documented here. The format is based on
 follows [Julia-style semantic versioning](https://pkgdocs.julialang.org/v1/compatibility/)
 (for `0.x` releases, a bump of the minor version may include breaking changes).
 
+## [Unreleased]
+
+### Added
+
+- `fit_mvnormal` BCD path: new keyword arguments `bcd_polish` (run a short
+  joint LBFGS polish from the BCD endpoint when the full n-dim loss is
+  still above `ftarget`; default `false`) and `bcd_polish_iterations`
+  (default 10). This makes the final "polish" step of the paper's
+  Algorithm 2 available through the public front door; `info` gains
+  `polished` and `loss_before_polish` fields.
+
+### Fixed
+
+- **Deep-tail robustness of the moment recursion.** The univariate
+  truncated-normal `moments` recurrence divided by a naively-computed
+  cdf difference, which cancels to exactly 0 when both bounds sit far
+  in a tail (e.g. a finite box face 20σ out) and sent `Inf`/`NaN` up
+  the Kan–Robotti tree; it now divides by the truncation mass that
+  Distributions.jl computes stably in log space. Additionally, a
+  recursion state whose box probability underflows to zero (or is
+  non-finite) now zero-fills its raw-moment cache instead of recursing
+  into degenerate children.
+- `fit_mvnormal` BCD path: the loss monitor now matches the acceptance
+  gate. With `bcd_accept_by = :full` the full n-dim loss (already
+  computed for acceptance) is also the stopping criterion and the
+  reported `info.loss`; previously the marginal-sum proxy was always
+  used, so full-acceptance runs never noticed reaching `ftarget` and
+  ground on to the iteration cap.
+- **`mean(d)`, `cov(d)` and `tp(d)` on `TruncatedMvNormal` now use the
+  Kan–Robotti moment cache** instead of silently falling back to generic
+  n-dimensional adaptive cubature. The fallback was exponentially slow in
+  dimension (≈ 220 s for a first `mean(d)` at n = 5 versus ≈ 0.4 s via
+  the recursion) and contradicted the documented behaviour. The state's
+  `tp_err` / `μ_err` / `Σ_err` fields are set to the base-case
+  integrator's characteristic error scale (1e-5 for `:mvnormalcdf` at
+  m = 10^4; 1e-6 for `:hcubature`), not a certified per-moment bound.
+
 ## [0.3.0] — 2026-06-13
 
 ### Added

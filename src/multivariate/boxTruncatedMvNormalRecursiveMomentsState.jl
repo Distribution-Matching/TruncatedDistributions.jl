@@ -258,17 +258,40 @@ function compute_moments(d::BoxTruncatedMvNormalRecursiveMomentsState)
         c
     end
 
+    # A state whose box probability underflows to zero (or is
+    # non-finite from the base integrator) carries no
+    # Float64-representable mass, so every raw moment of the state is 0
+    # to machine precision. Guarding here matters for deep-tail
+    # conditional faces: e.g. a finite bound 20σ out spawns a child
+    # whose truncated mass underflows, and the univariate moment
+    # recurrence would otherwise divide by tp = 0 and send Inf/NaN back
+    # up the tree through a tiny-but-nonzero φ weight in `c_vector`.
+    function zero_fill!(d::BoxTruncatedMvNormalRecursiveMomentsState)
+        for k in keys(d.rawMomentDict)
+            d.rawMomentDict[k] = 0.0
+        end
+    end
+
     if d.n > 1
         baseKey = zeros(Int,d.n) #[0,0,....,0]
-        d.rawMomentDict[baseKey] = LL(d)
-        compute_children_moments(d,baseKey) #start recursion
+        m0 = LL(d)
+        if m0 > 0.0 && isfinite(m0)
+            d.rawMomentDict[baseKey] = m0
+            compute_children_moments(d,baseKey) #start recursion
+        else
+            zero_fill!(d)
+        end
     else  #n==1
         @assert d.n == 1
         distTruncated = truncated(Normal(d.d.μ[1],sqrt(d.d.Σ[1])),d.r.a[1],d.r.b[1])
-        d.rawMomentDict[[0]] = distTruncated.tp
-        m = moments(distTruncated, d.max_moment_levels)
-        for i in 1:d.max_moment_levels
-            d.rawMomentDict[[i]] = m[i]*distTruncated.tp
+        if distTruncated.tp > 0.0 && isfinite(distTruncated.tp)
+            d.rawMomentDict[[0]] = distTruncated.tp
+            m = moments(distTruncated, d.max_moment_levels)
+            for i in 1:d.max_moment_levels
+                d.rawMomentDict[[i]] = m[i]*distTruncated.tp
+            end
+        else
+            zero_fill!(d)
         end
     end
     d.rawMomentsComputed = true

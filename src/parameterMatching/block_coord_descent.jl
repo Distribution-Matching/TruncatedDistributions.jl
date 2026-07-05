@@ -1,16 +1,17 @@
 """
     block_coord_descent(μ̂, Σ̂, a, b; ...) -> (μ, Σ, hist)
 
-Marginal-loss block coordinate descent for truncated MVN moment matching.
+Block coordinate descent for truncated MVN moment matching.
 At each iteration we enumerate every candidate subset `S ⊂ {1,…,n}` whose
 size is in `block_sizes` (default `[1, 2, 3]`), score it by the
 *per-target* marginal residual
 
-    score(S) = moment_loss(2D-truncN(μ_S, Σ_SS), μ̂_S, Σ̂_SS) / |S|(|S|+3)/2 ,
+    score(S) = moment_loss(k-dim truncN(μ_S, Σ_SS), μ̂_S, Σ̂_SS) / (k(k+3)/2) ,   k = |S|,
 
-and pick the highest-scoring subset. We run a small EXP-KR-MVN sub-problem
-at size `|S|` to fit the block to its 2D/3D marginal target, then write
-the in-block `(μ_S, Σ_SS)` back into the full iterate while preserving the
+and pick a subset by the `selection` rule. We then run a short LBFGS
+sub-problem (explicit Kan–Robotti gradient) at size `k`, started from the
+current block iterate `(μ_S, Σ_SS)`, to fit the block's marginal targets,
+and write the result back into the full iterate while preserving the
 correlations of the unchanged off-block coordinates (off-block `Σ_{i,k}`,
 `k ∉ S` rescales by `σ_i_new / σ_i_old`).
 

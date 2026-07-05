@@ -40,3 +40,68 @@ function raw_moment_from_indices(d::RecursiveMomentsBoxTruncatedMvNormal, indice
     end
     raw_moment(d, kappa)
 end
+
+# ---------------------------------------------------------------------------
+# Kan–Robotti-backed tp / mean / cov
+#
+# The generic `compute_tp` / `compute_mean` / `compute_cov` of
+# commonCompute.jl fall back to n-dimensional adaptive cubature, which is
+# exponentially slow in n (minutes at n = 5). For the recursive-moments
+# type the order-≤2 primitive moments are already in the Kan–Robotti cache
+# (or one tree walk away), so `tp(d)`, `mean(d)` and `cov(d)` read them
+# from the cache instead. The recursion is exact arithmetic on top of the
+# base-case box probabilities, so the cached values inherit the base
+# integrator's error scale; we record that characteristic scale (not a
+# certified per-moment bound) in the state's error fields.
+# ---------------------------------------------------------------------------
+
+_kr_characteristic_err() = _KR_BASE_BACKEND[] === :mvnormalcdf ? 1e-5 : 1e-6
+
+function compute_tp(d::RecursiveMomentsBoxTruncatedMvNormal; kwargs...)
+    s = d.state
+    s.tp = raw_moment(s, zeros(Int, s.n))
+    s.tp_err = _kr_characteristic_err()
+    nothing
+end
+
+function compute_mean(d::RecursiveMomentsBoxTruncatedMvNormal; kwargs...)
+    s = d.state
+    s.max_moment_levels >= 1 || throw(ArgumentError(
+        "mean(d) via the Kan–Robotti cache needs max_moment_levels ≥ 1; " *
+        "got $(s.max_moment_levels)"))
+    n = s.n
+    m0 = raw_moment(s, zeros(Int, n))
+    κ = zeros(Int, n)
+    μ = Vector{Float64}(undef, n)
+    for i in 1:n
+        κ[i] = 1
+        μ[i] = raw_moment(s, κ) / m0
+        κ[i] = 0
+    end
+    s.μ = μ
+    s.μ_err = _kr_characteristic_err()
+    nothing
+end
+
+function compute_cov(d::RecursiveMomentsBoxTruncatedMvNormal; kwargs...)
+    s = d.state
+    s.max_moment_levels >= 2 || throw(ArgumentError(
+        "cov(d) via the Kan–Robotti cache needs max_moment_levels ≥ 2; " *
+        "got $(s.max_moment_levels)"))
+    n = s.n
+    m0 = raw_moment(s, zeros(Int, n))
+    μ = mean(d)                       # cached by compute_mean above
+    κ = zeros(Int, n)
+    Σ = Matrix{Float64}(undef, n, n)
+    for i in 1:n, j in i:n
+        κ[i] += 1
+        κ[j] += 1
+        Σ[i, j] = raw_moment(s, κ) / m0 - μ[i] * μ[j]
+        Σ[j, i] = Σ[i, j]
+        κ[i] = 0
+        κ[j] = 0
+    end
+    s.Σ = PDMat(0.5 .* (Σ .+ Σ'))
+    s.Σ_err = _kr_characteristic_err()
+    nothing
+end
