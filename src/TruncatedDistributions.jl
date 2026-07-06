@@ -59,6 +59,12 @@ export
     # Kan–Robotti backend toggle
     set_kr_base_backend!,
     get_kr_base_backend,
+    set_kr_base_rng!,
+    get_kr_base_rng,
+
+    # moment-matching loss weight (γ)
+    set_loss_gamma!,
+    get_loss_gamma,
 
     # integration helper
     hcubature_inf,

@@ -9,12 +9,20 @@ algorithm-specific traces.
 # Notes
 
 The fit runs in the original `(μ, Σ)` coordinates with no global
-standardisation; the loss
-`L = ½‖μA − μ̂‖² + ½‖ΣA − Σ̂‖²_F` weights the mean- and
-covariance-residual blocks equally. The coordinate warm-start does
-per-axis `(μ, log σ²)` rescaling, which is usually enough for targets at
-`O(1)` scale. For targets at very different scales, rescale the inputs
-yourself or watch issue #7.
+standardisation; the loss is
+`L = ½‖μA − μ̂‖² + γ·r(n)·½‖ΣA − Σ̂‖²_F` with `r(n) = 2/(n+1)`, so the
+covariance weight `gamma` (default 0.2) trades off mean- against
+covariance-matching in a dimension-free way: `gamma = 1` balances the
+two blocks, `gamma < 1` favours the mean (0.2 ⇒ mean 5× the
+covariance), `gamma > 1` favours the covariance. The coordinate
+warm-start does per-axis `(μ, log σ²)` rescaling, which is usually
+enough for targets at `O(1)` scale. For targets at very different
+scales, rescale the inputs yourself or watch issue #7.
+
+For a reproducible fit under the (randomised-QMC) `:mvnormalcdf` base
+case, pass `seed`: it installs a seeded `MersenneTwister` as the
+base-case RNG for the duration of the call, so the box probabilities —
+and the BCD accept/reject path built on them — repeat run to run.
 
 # Methods
 
@@ -34,6 +42,9 @@ yourself or watch issue #7.
 * `μ_init`, `Σ_init` — starting point for the optimiser. If omitted, the
                       coordinate warm-start is used.
 * `ftarget`         — stop when the loss falls below this (default 1e-3).
+* `gamma`           — covariance-term weight (default 0.2); see Notes.
+* `seed`            — if given, seed the base-case RNG for a reproducible
+                      fit (default `nothing`, i.e. non-deterministic QMC).
 * `time_limit`      — seconds (`:lbfgs` only; the BCD path is paced
                       instead by `iterations × bcd_inner_iters`).
 * `iterations`      — outer-loop iteration cap (default 50 for LBFGS,
@@ -97,7 +108,9 @@ function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
                      bcd_selection::Symbol = :softmax,
                      bcd_softmax_T::Float64 = 1.0,
                      bcd_polish::Bool = false,
-                     bcd_polish_iterations::Int = 10)
+                     bcd_polish_iterations::Int = 10,
+                     gamma::Real = 0.2,
+                     seed::Union{Nothing, Integer} = nothing)
     n = length(μ̂)
     size(Σ̂) == (n, n) ||
         throw(DimensionMismatch("Σ̂ must be $(n)×$(n); got $(size(Σ̂))"))
@@ -115,34 +128,49 @@ function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
     μ̂_v = collect(Float64, μ̂)
     Σ̂_m = Matrix{Float64}(Σ̂)
 
-    # Warm-start unless caller supplied an initial point.
-    if μ_init === nothing || Σ_init === nothing
-        μ_ws, Σ_ws = warm_start_diagonal(μ̂_v, Σ̂_m, a_v, b_v)
-        μ_init === nothing && (μ_init = μ_ws)
-        Σ_init === nothing && (Σ_init = Σ_ws)
-    end
-    μ0 = collect(Float64, μ_init)
-    Σ0 = Matrix{Float64}(Σ_init)
+    # Set the loss weight γ and (optionally) a seeded base-case RNG for the
+    # duration of the fit, restoring the previous globals on exit so callers
+    # are not surprised by lingering state.
+    prev_gamma = set_loss_gamma!(gamma)
+    prev_rng = seed === nothing ? nothing : set_kr_base_rng!(MersenneTwister(seed))
+    try
+        # Warm-start unless caller supplied an initial point.
+        if μ_init === nothing || Σ_init === nothing
+            μ_ws, Σ_ws = warm_start_diagonal(μ̂_v, Σ̂_m, a_v, b_v)
+            μ_init === nothing && (μ_init = μ_ws)
+            Σ_init === nothing && (Σ_init = Σ_ws)
+        end
+        μ0 = collect(Float64, μ_init)
+        Σ0 = Matrix{Float64}(Σ_init)
 
-    if chosen === :lbfgs
-        return _fit_mvnormal_lbfgs(μ̂_v, Σ̂_m, a_v, b_v, μ0, Σ0;
-                                   ftarget = ftarget,
-                                   time_limit = time_limit,
-                                   iterations = iterations === nothing ? 50 : iterations,
-                                   verbose = verbose)
-    else  # :bcd
-        return _fit_mvnormal_bcd(μ̂_v, Σ̂_m, a_v, b_v, μ0, Σ0;
-                                 ftarget = ftarget,
-                                 iterations = iterations === nothing ? 30 : iterations,
-                                 verbose = verbose,
-                                 block_sizes = bcd_block_sizes,
-                                 inner_iters = bcd_inner_iters,
-                                 accept_by = bcd_accept_by,
-                                 selection = bcd_selection,
-                                 softmax_T = bcd_softmax_T,
-                                 polish = bcd_polish,
-                                 polish_iterations = bcd_polish_iterations,
-                                 time_limit = time_limit)
+        if chosen === :lbfgs
+            return _fit_mvnormal_lbfgs(μ̂_v, Σ̂_m, a_v, b_v, μ0, Σ0;
+                                       ftarget = ftarget,
+                                       time_limit = time_limit,
+                                       iterations = iterations === nothing ? 50 : iterations,
+                                       verbose = verbose)
+        else  # :bcd
+            # Softmax draws use a separate seeded stream from the base-case
+            # QMC (seed + 1) so both are reproducible and uncorrelated.
+            bcd_rng = seed === nothing ? Random.default_rng() :
+                      MersenneTwister(seed + 1)
+            return _fit_mvnormal_bcd(μ̂_v, Σ̂_m, a_v, b_v, μ0, Σ0;
+                                     ftarget = ftarget,
+                                     iterations = iterations === nothing ? 30 : iterations,
+                                     verbose = verbose,
+                                     block_sizes = bcd_block_sizes,
+                                     inner_iters = bcd_inner_iters,
+                                     accept_by = bcd_accept_by,
+                                     selection = bcd_selection,
+                                     softmax_T = bcd_softmax_T,
+                                     polish = bcd_polish,
+                                     polish_iterations = bcd_polish_iterations,
+                                     time_limit = time_limit,
+                                     rng = bcd_rng)
+        end
+    finally
+        set_loss_gamma!(prev_gamma)
+        prev_rng === nothing || set_kr_base_rng!(prev_rng)
     end
 end
 
@@ -182,7 +210,8 @@ function _fit_mvnormal_bcd(μ̂::Vector{Float64}, Σ̂::Matrix{Float64},
                            softmax_T::Float64,
                            polish::Bool = false,
                            polish_iterations::Int = 10,
-                           time_limit::Float64 = 60.0)
+                           time_limit::Float64 = 60.0,
+                           rng::AbstractRNG = Random.default_rng())
     # `time_limit` is honoured by the BCD phase via the inner
     # per-iteration cap of `bcd_inner_iters` (outer cap `iterations`);
     # the optional polish phase honours it directly.
@@ -203,6 +232,7 @@ function _fit_mvnormal_bcd(μ̂::Vector{Float64}, Σ̂::Matrix{Float64},
             accept_by = accept_by,
             selection = selection,
             softmax_T = softmax_T,
+            rng = rng,
             verbose = verbose)
     end
     loss_bcd = isempty(hist) ? NaN : hist[end]

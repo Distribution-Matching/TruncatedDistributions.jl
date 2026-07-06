@@ -361,6 +361,36 @@ box probability — either `:hcubature` or `:mvnormalcdf`. See
 """
 get_kr_base_backend() = _KR_BASE_BACKEND[]
 
+# Random source for the `:mvnormalcdf` (Genz–Bretz QMC) base case. Its
+# default `rng` is `RandomDevice()`, a hardware RNG that ignores
+# `Random.seed!`, so QMC-noisy box probabilities are non-reproducible.
+# Setting a seeded RNG here (e.g. `MersenneTwister(0)`) makes the whole
+# moment pipeline — and any BCD accept/reject path built on it —
+# reproducible run to run.
+const _KR_BASE_RNG = Ref{AbstractRNG}(RandomDevice())
+
+"""
+    set_kr_base_rng!(rng::AbstractRNG)
+
+Set the random source used by the `:mvnormalcdf` base case. Pass a seeded
+generator (e.g. `MersenneTwister(0)`) for a reproducible pipeline; pass
+`RandomDevice()` to restore the non-deterministic default. Returns the
+previous RNG.
+"""
+function set_kr_base_rng!(rng::AbstractRNG)
+    prev = _KR_BASE_RNG[]
+    _KR_BASE_RNG[] = rng
+    return prev
+end
+
+"""
+    get_kr_base_rng()
+
+Return the RNG currently used by the `:mvnormalcdf` base case. See
+[`set_kr_base_rng!`](@ref).
+"""
+get_kr_base_rng() = _KR_BASE_RNG[]
+
 function LL(d::BoxTruncatedMvNormalRecursiveMomentsState)
     # @info "doing base numerical integral on dimension $(d.n)."
     if _KR_BASE_BACKEND[] === :mvnormalcdf
@@ -370,7 +400,7 @@ function LL(d::BoxTruncatedMvNormalRecursiveMomentsState)
         # samples typically gives ~1e-5 error in well under a millisecond
         # after JIT warm-up; that error is small enough not to perturb
         # downstream moments at the test cross-check tolerance.
-        return mvnormcdf(d.d, d.r.a, d.r.b; m = 10_000)[1]
+        return mvnormcdf(d.d, d.r.a, d.r.b; m = 10_000, rng = _KR_BASE_RNG[])[1]
     else
         return hcubature_inf((x)->pdf(d.d,x), d.r.a, d.r.b, maxevals = 10^6)[1]
     end
