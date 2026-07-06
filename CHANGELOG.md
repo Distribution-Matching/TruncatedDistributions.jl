@@ -9,6 +9,16 @@ follows [Julia-style semantic versioning](https://pkgdocs.julialang.org/v1/compa
 
 ### Added
 
+- **Monte-Carlo moments for high dimension.** `mc_moments(d)` returns
+  `(tp, μ, Σ)` by rejection sampling (in-place, allocation-light), and
+  `tp(d)` / `mean(d)` / `cov(d)` fall back to it automatically for
+  dimension `n > 6` (configurable via `set_moment_mc!`), where adaptive
+  cubature is exponential and the Kan–Robotti tree is infeasible even to
+  build. Fast at high `n` (n = 20 in ~0.1 s). Use
+  `BasicBoxTruncatedMvNormal` at high `n`: the recursive `TruncatedMvNormal`
+  constructor eagerly builds the full `2^{n-1}(n-1)!` child tree and is
+  unconstructable past `n ≈ 8`, whereas the Basic type stores only
+  `(μ, Σ)` and computes moments purely by MC.
 - **Single covariance weight `gamma` for the moment-matching loss.** The
   loss is now `L = L1 + gamma·r(n)·L2` with `r(n) = 2/(n+1)` the ratio of
   mean to covariance parameter counts. `gamma` is scale-free: `gamma = 1`

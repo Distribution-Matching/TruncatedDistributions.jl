@@ -57,8 +57,20 @@ end
 
 _kr_characteristic_err() = _KR_BASE_BACKEND[] === :mvnormalcdf ? 1e-5 : 1e-6
 
+# The recursive-moment type reads its cached order-≤2 moments from the
+# Kan–Robotti tree. Above `_MOMENT_MC_ABOVE[]` — where even walking the
+# tree is expensive — it delegates to the shared Monte-Carlo estimator
+# (`_fill_moments_mc!`, commonCompute.jl), using the seeded base-case RNG.
+# (This type cannot be *constructed* much past n ≈ 8 anyway, since the
+# constructor builds the full 2^{n-1}(n-1)! child tree; high-n callers
+# should use `BasicBoxTruncatedMvNormal`, whose moments are pure MC.)
+
 function compute_tp(d::RecursiveMomentsBoxTruncatedMvNormal; kwargs...)
     s = d.state
+    if s.n > _MOMENT_MC_ABOVE[]
+        _fill_moments_mc!(d, _MOMENT_MC_SAMPLES[], _KR_BASE_RNG[])
+        return nothing
+    end
     s.tp = raw_moment(s, zeros(Int, s.n))
     s.tp_err = _kr_characteristic_err()
     nothing
@@ -66,6 +78,10 @@ end
 
 function compute_mean(d::RecursiveMomentsBoxTruncatedMvNormal; kwargs...)
     s = d.state
+    if s.n > _MOMENT_MC_ABOVE[]
+        _fill_moments_mc!(d, _MOMENT_MC_SAMPLES[], _KR_BASE_RNG[])
+        return nothing
+    end
     s.max_moment_levels >= 1 || throw(ArgumentError(
         "mean(d) via the Kan–Robotti cache needs max_moment_levels ≥ 1; " *
         "got $(s.max_moment_levels)"))
@@ -85,6 +101,10 @@ end
 
 function compute_cov(d::RecursiveMomentsBoxTruncatedMvNormal; kwargs...)
     s = d.state
+    if s.n > _MOMENT_MC_ABOVE[]
+        _fill_moments_mc!(d, _MOMENT_MC_SAMPLES[], _KR_BASE_RNG[])
+        return nothing
+    end
     s.max_moment_levels >= 2 || throw(ArgumentError(
         "cov(d) via the Kan–Robotti cache needs max_moment_levels ≥ 2; " *
         "got $(s.max_moment_levels)"))

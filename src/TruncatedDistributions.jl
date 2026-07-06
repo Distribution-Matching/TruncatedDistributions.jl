@@ -62,6 +62,10 @@ export
     set_kr_base_rng!,
     get_kr_base_rng,
 
+    # high-dimensional Monte-Carlo moments
+    mc_moments,
+    set_moment_mc!,
+
     # moment-matching loss weight (γ)
     set_loss_gamma!,
     get_loss_gamma,

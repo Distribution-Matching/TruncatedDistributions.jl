@@ -132,6 +132,42 @@ end
     @test isapprox(Matrix(cov(d_basic)), Matrix(cov(d_rec));  atol = 1e-4)
 end
 
+@testset "mc_moments — agrees with Kan–Robotti at n = 3" begin
+    using Random
+    prev = set_kr_base_backend!(:mvnormalcdf)
+    try
+        μ = [0.5, 0.0, -0.3]; Σ = [1.0 0.5 0.3; 0.5 1.0 0.2; 0.3 0.2 1.0]
+        a = [-1.0, -2.0, -1.5]; b = [2.0, 1.0, 1.0]
+        d = TruncatedMvNormal(μ, Σ, a, b)
+        tpk, μk, Σk = tp(d), collect(mean(d)), Matrix(cov(d))
+        tpm, μm, Σm = mc_moments(BasicBoxTruncatedMvNormal(μ, Σ, a, b);
+                                 n_samples = 400_000, rng = MersenneTwister(1))
+        @test isapprox(tpm, tpk; atol = 3e-3)         # ~1/sqrt(N) MC error
+        @test isapprox(μm, μk;  atol = 1e-2)
+        @test isapprox(Σm, Σk;  atol = 2e-2)
+    finally
+        set_kr_base_backend!(prev)
+    end
+end
+
+@testset "high-n Monte-Carlo moments — Basic type" begin
+    using Random
+    n = 15
+    Σ = Matrix(1.0I, n, n); for i in 1:(n-1); Σ[i, i+1] = 0.3; Σ[i+1, i] = 0.3; end
+    d = BasicBoxTruncatedMvNormal(zeros(n), Σ, fill(-2.0, n), fill(2.0, n))
+    prev = set_moment_mc!(above = 6, samples = 50_000)
+    try
+        Random.seed!(3)
+        m = collect(mean(d; worst_tol = 0.02))     # auto-dispatches to MC (n > 6)
+        C = Matrix(cov(d;  worst_tol = 0.02))
+        @test norm(m) < 0.05                        # centred, symmetric box
+        @test isposdef(C)
+        @test all(0.5 .< diag(C) .< 1.0)            # variance shrunk by truncation
+    finally
+        set_moment_mc!(above = prev[1], samples = prev[2])
+    end
+end
+
 @testset "show methods don't crash" begin
     d = TruncatedMvNormal([0.0, 0.0], [1.0 0.0; 0.0 1.0],
                            [-1.0, -1.0], [1.0, 1.0])
