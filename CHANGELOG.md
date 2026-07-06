@@ -9,6 +9,20 @@ follows [Julia-style semantic versioning](https://pkgdocs.julialang.org/v1/compa
 
 ### Added
 
+- **Single covariance weight `gamma` for the moment-matching loss.** The
+  loss is now `L = L1 + gamma·r(n)·L2` with `r(n) = 2/(n+1)` the ratio of
+  mean to covariance parameter counts. `gamma` is scale-free: `gamma = 1`
+  balances the two residual blocks for every `n`, and the new default
+  `gamma = 0.2` weights the mean 5× the covariance. Set globally with
+  `set_loss_gamma!` / `get_loss_gamma`, or per fit via the `gamma` keyword
+  of `fit_mvnormal`. **Breaking:** the loss (and hence `moment_loss`,
+  `info.loss`, and the fit thresholds) is no longer the unweighted
+  `L1 + L2`.
+- **Reproducible fits.** The `:mvnormalcdf` base case defaulted to
+  `RandomDevice()` and ignored `Random.seed!`. A settable base-case RNG
+  (`set_kr_base_rng!` / `get_kr_base_rng`) plus a `seed` keyword on
+  `fit_mvnormal` (which seeds both the base case and the BCD softmax
+  stream) make a fit — and its accept/reject path — repeat run to run.
 - `fit_mvnormal` BCD path: new keyword arguments `bcd_polish` (run a short
   joint LBFGS polish from the BCD endpoint when the full n-dim loss is
   still above `ftarget`; default `false`) and `bcd_polish_iterations`
