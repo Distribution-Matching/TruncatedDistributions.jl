@@ -23,7 +23,7 @@ matcher — addressing problems that `Distributions.truncated` does not.
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/Distribution-Matching/TruncatedDistributions.jl")
+Pkg.add("TruncatedDistributions")
 ```
 
 Julia 1.10 or newer.

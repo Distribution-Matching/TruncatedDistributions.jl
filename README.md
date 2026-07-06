@@ -59,7 +59,7 @@ a dynamic, ODE-based moment matcher — addressing problems that
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/Distribution-Matching/TruncatedDistributions.jl")
+Pkg.add("TruncatedDistributions")
 ```
 
 Julia 1.10 or newer.
