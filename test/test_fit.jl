@@ -145,3 +145,31 @@ end
     @test Matrix(r1[2]) == Matrix(r2[2])   # Σ identical
     @test r1[3].loss == r2[3].loss
 end
+
+@testset "fit_mvnormal — BCD polish" begin
+    set_kr_base_backend!(:mvnormalcdf)
+    μ = [0.2, 0.0, -0.1]; Σ = [1.0 0.3 0.2; 0.3 1.0 0.1; 0.2 0.1 1.0]
+    a = fill(-1.5, 3); b = fill(1.5, 3)
+    μ̂, Σ̂ = _targets_from(μ, Σ, a, b)
+    _, _, info = fit_mvnormal(μ̂, Σ̂, a, b; method = :bcd, bcd_accept_by = :marginal,
+                              bcd_polish = true, seed = 7)
+    @test haskey(info, :polished)
+    @test info.loss < 1e-2                       # polished to (near) target
+    @test isfinite(info.loss)
+end
+
+@testset "config setters — round-trip and restore" begin
+    g0 = get_loss_gamma()
+    @test set_loss_gamma!(0.7) == g0             # returns previous
+    @test get_loss_gamma() == 0.7
+    set_loss_gamma!(g0)
+    @test get_loss_gamma() == g0
+
+    prev_rng = get_kr_base_rng()
+    @test set_kr_base_rng!(MersenneTwister(3)) === prev_rng
+    set_kr_base_rng!(prev_rng)
+    @test get_kr_base_rng() === prev_rng
+
+    prev_mc = set_moment_mc!(above = 9, samples = 12_345)
+    @test set_moment_mc!(above = prev_mc[1], samples = prev_mc[2]) == (9, 12_345)
+end

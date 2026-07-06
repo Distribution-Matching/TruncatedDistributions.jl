@@ -1,7 +1,7 @@
 name = "TruncatedDistributions"
 uuid = "77af390e-3af4-4cd8-bbfa-7ab7569c172d"
 authors = ["Yoni Nazarathy"]
-version = "0.3.0"
+version = "0.4.0"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"

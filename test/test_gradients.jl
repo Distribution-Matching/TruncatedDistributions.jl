@@ -82,3 +82,20 @@ end
                                  collect(ne.μ̂), Matrix(ne.Σ̂))
     @test norm(g_an, Inf) < 1e-5
 end
+
+@testset "True-loss gradient tracks γ (analytic vs FD at γ ≠ default)" begin
+    # The covariance-block weight must appear in the gradient, not just the
+    # loss: cross-check analytic vs FD at γ = 1 (≠ the default 0.2).
+    c = GRAD_CASES[1]
+    prev = get_loss_gamma()
+    try
+        set_loss_gamma!(1.0)
+        p = _grad_test_setup(c.μ, c.Σ)
+        f(q) = vector_moment_loss(q, c.a, c.b, collect(c.μ̂), Matrix(c.Σ̂))
+        g_an = vector_grad_true_loss(p, c.a, c.b, collect(c.μ̂), Matrix(c.Σ̂))
+        g_fd = _fd_grad(f, p)
+        @test norm(g_an - g_fd, Inf) < 1e-6
+    finally
+        set_loss_gamma!(prev)
+    end
+end

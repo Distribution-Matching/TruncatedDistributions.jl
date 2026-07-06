@@ -38,11 +38,19 @@ a dynamic, ODE-based moment matcher — addressing problems that
 - Two interchangeable backends for the base case of the recursion:
   `:hcubature` (default, works with any element type) and `:mvnormalcdf`
   (Genz and Bretz separation-of-variables + QMC; Float64-only, much
-  faster).
+  faster). The randomised `:mvnormalcdf` base case is seedable
+  (`set_kr_base_rng!`, or the `seed` keyword of `fit_mvnormal`) for a
+  fully reproducible pipeline.
+- Monte-Carlo moments for high dimension: `mc_moments(d)` and an automatic
+  `tp` / `mean` / `cov` fallback above `n = 6` (`set_moment_mc!`), where
+  the recursion tree is infeasible to build. Fast even at `n = 20` via
+  `BasicBoxTruncatedMvNormal`.
 - Optional moment-matching layer: `fit_mvnormal(μ̂, Σ̂, a, b)` recovers
-  `(μ, Σ)` whose box-truncation has the requested moments. Picks joint
-  LBFGS + warm-start for small problems and a hybrid block-coordinate
-  solver for larger ones.
+  `(μ, Σ)` whose box-truncation has the requested moments, under a
+  single, scale-free covariance weight `γ` (`gamma`, default `0.2`, so
+  the mean is weighted five times the covariance). Picks joint LBFGS +
+  warm-start for small problems and a hybrid block-coordinate solver for
+  larger ones.
 - Univariate tools: a dynamic (ODE-based) moment-matcher for one-dimensional
   truncated distributions — `dynamic_fit_locationscale` and
   `dynamic_fit_exponential` — implementing Liquet and Nazarathy (2015).
@@ -84,11 +92,15 @@ rand(d)               # one sample via rejection from the untruncated MvNormal
 rand(d, 100)          # 2 × 100 batch
 ```
 
-`TruncatedMvNormal` is the recommended type. It is an alias for
-`RecursiveMomentsBoxTruncatedMvNormal` — the longer name spells out what
-the cached state holds. A second alias, `BasicBoxTruncatedMvNormal`,
-exposes a no-recursion implementation that integrates moments by direct
-cubature (fine at n = 2, 3; slower beyond that).
+`TruncatedMvNormal` is the recommended type up to moderate dimension. It
+is an alias for `RecursiveMomentsBoxTruncatedMvNormal` — the longer name
+spells out what the cached state holds. Its constructor eagerly builds
+the full Kan–Robotti child tree, so it is not constructable much beyond
+`n ≈ 8`. For high dimension use `BasicBoxTruncatedMvNormal`, a
+no-recursion type that stores only `(μ, Σ)`: it integrates moments by
+direct cubature at small `n` and by Monte Carlo above `n = 6` (see
+[`mc_moments`](@ref) / `set_moment_mc!`), so `mean(d)` / `cov(d)` remain
+cheap at `n = 20`.
 
 Both `Σ` and the box bounds can be supplied as plain `Vector` / `Matrix`;
 they will be wrapped in `PDMat` and converted internally.
@@ -109,8 +121,10 @@ rand(d.untruncated, 100)         # untruncated samples
 ```
 
 The first call to `mean(d)` / `cov(d)` runs the recursive moment formula
-of Kan and Robotti (2017) and caches the result. Repeated calls reuse the
-cache.
+of Kan and Robotti (2017) and caches the result; repeated calls reuse the
+cache. Above `n = 6` (configurable via `set_moment_mc!`) these instead
+fall back to Monte-Carlo estimation, where the recursion is infeasible to
+build — `mc_moments(d)` returns the `(tp, μ, Σ)` estimate directly.
 
 ### Tolerance and the cache
 
@@ -182,9 +196,16 @@ b = [ 1.5,  1.0]
 
 μ_fit, Σ_fit, info = fit_mvnormal(μ̂, Σ̂, a, b)
 @show info.method   # :lbfgs at this size; :bcd for n ≥ 7
-@show info.loss     # ½‖μA − μ̂‖² + ½‖ΣA − Σ̂‖²_F
+@show info.loss     # ½‖μA − μ̂‖² + γ·r(n)·½‖ΣA − Σ̂‖²_F
 @show info.time
 ```
+
+The loss is `L = L1 + γ·r(n)·L2`, with `L1 = ½‖μA − μ̂‖²` the mean
+residual, `L2 = ½‖ΣA − Σ̂‖²_F` the covariance residual, and
+`r(n) = 2/(n+1)` the ratio of mean to covariance parameter counts. The
+single weight `γ` (keyword `gamma`, default `0.2`) is scale-free: `γ = 1`
+balances the two residual blocks for every `n`, and the default `γ = 0.2`
+weights the mean five times as heavily as the covariance.
 
 Force a particular method:
 
@@ -200,11 +221,18 @@ Useful keyword arguments:
 | --- | --- | --- |
 | `method` | `:auto` | `:auto`, `:lbfgs`, or `:bcd` |
 | `n_threshold` | `6` | dimension cutoff used by `:auto` |
+| `gamma` | `0.2` | covariance weight in the loss (`γ = 1` balances mean and covariance) |
 | `ftarget` | `1e-3` | stop when loss drops below this |
+| `seed` | `nothing` | seed the randomised base case for a reproducible fit |
 | `iterations` | `50` / `30` | outer-iteration cap (LBFGS / BCD) |
 | `time_limit` | `60.0` | seconds (LBFGS only) |
 | `μ_init`, `Σ_init` | warm-start | override starting point |
 | `verbose` | `false` | print one line per iteration |
+
+The `:bcd` path also takes `bcd_selection` (`:softmax` default),
+`bcd_accept_by` (`:marginal` default; `:full` for monotone descent at
+small `n`), and `bcd_polish` (default `false`; a joint-LBFGS polish from
+the BCD endpoint).
 
 ### Why two algorithms
 
@@ -223,7 +251,8 @@ correcting joint correlation structure.
 ```julia
 warm_start_diagonal(μ̂, Σ̂, a, b)   # coordinate-wise 1D LBFGS warm-start
 block_coord_descent(μ̂, Σ̂, a, b)   # underlying BCD; returns (μ, Σ, hist, picks)
-moment_loss(d, μ̂, Σ̂)              # scalar loss read off the cached moments
+moment_loss(d, μ̂, Σ̂)              # γ-weighted scalar loss off the cached moments
+set_loss_gamma!(1.0)              # set the covariance weight γ globally
 ```
 
 ## Univariate tools: dynamic moment matching
@@ -280,8 +309,9 @@ d  = dist_from_example(ne)          # built as a RecursiveMomentsBoxTruncatedMvN
 ```
 
 The unit suite covers regions, the 1D moment recurrence, the multivariate
-recursion cross-checked against direct cubature, gradient correctness, and
-the `fit_mvnormal` end-to-end recovery.
+recursion cross-checked against direct cubature, gradient correctness
+(including the γ weighting), Monte-Carlo moments against the recursion,
+seeded reproducibility, and the `fit_mvnormal` end-to-end recovery.
 
 Long-running benchmark scripts for the companion paper live in a
 separate repository:

@@ -5,7 +5,7 @@ All notable changes to this project are documented here. The format is based on
 follows [Julia-style semantic versioning](https://pkgdocs.julialang.org/v1/compatibility/)
 (for `0.x` releases, a bump of the minor version may include breaking changes).
 
-## [Unreleased]
+## [0.4.0] — 2026-07-07
 
 ### Added
 
