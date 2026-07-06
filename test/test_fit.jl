@@ -111,3 +111,37 @@ end
     @test_throws ArgumentError fit_mvnormal(μ̂, Σ̂, [-1.0,-1.0], [1.0,1.0];
                                             method = :badmethod)
 end
+
+@testset "loss gamma — weighting and r(n)" begin
+    set_kr_base_backend!(:mvnormalcdf)
+    μ = [0.3, -0.2]; Σ = [1.0 0.4; 0.4 1.0]
+    a = [-1.0, -1.5]; b = [1.5, 1.0]
+    μ̂, Σ̂ = _targets_from(μ, Σ, a, b)
+    # perturb so both residual blocks are nonzero
+    d = TruncatedMvNormal([0.1, 0.0], [1.2 0.2; 0.2 0.9], a, b)
+    μ̂p = μ̂ .+ 0.05; Σ̂p = Σ̂ .+ 0.03
+    prev = get_loss_gamma()
+    try
+        set_loss_gamma!(1.0);  L1 = moment_loss(d, μ̂p, Σ̂p)
+        set_loss_gamma!(0.2);  L2 = moment_loss(d, μ̂p, Σ̂p)
+        set_loss_gamma!(0.0);  L0 = moment_loss(d, μ̂p, Σ̂p)  # mean-only
+        # L(γ) is affine in γ: L(γ) = L0 + γ·(L1 − L0). Check the 0.2 point.
+        @test isapprox(L2, L0 + 0.2 * (L1 - L0); rtol = 1e-10)
+        @test L0 < L2 < L1        # more covariance weight ⇒ larger loss here
+    finally
+        set_loss_gamma!(prev)
+    end
+    @test get_loss_gamma() == prev
+end
+
+@testset "fit_mvnormal — seeded reproducibility" begin
+    set_kr_base_backend!(:mvnormalcdf)
+    μ = [0.2, 0.0, -0.1]; Σ = [1.0 0.3 0.2; 0.3 1.0 0.1; 0.2 0.1 1.0]
+    a = fill(-1.5, 3); b = fill(1.5, 3)
+    μ̂, Σ̂ = _targets_from(μ, Σ, a, b)
+    r1 = fit_mvnormal(μ̂, Σ̂, a, b; method = :bcd, bcd_accept_by = :full, seed = 7)
+    r2 = fit_mvnormal(μ̂, Σ̂, a, b; method = :bcd, bcd_accept_by = :full, seed = 7)
+    @test r1[1] == r2[1]              # μ identical
+    @test Matrix(r1[2]) == Matrix(r2[2])   # Σ identical
+    @test r1[3].loss == r2[3].loss
+end
