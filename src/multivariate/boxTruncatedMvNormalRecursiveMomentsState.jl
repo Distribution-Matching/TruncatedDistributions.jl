@@ -56,7 +56,11 @@ mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistribut
         any(a .>= b) &&
             throw(ArgumentError("each a[i] must be strictly less than b[i]; got a=$a, b=$b"))
 
-        if n ≥ 2
+        # A node needing moments up to order L uses face moments up to
+        # order L - 1 only (see `c_vector`), so children are built at
+        # L - 1 and an order-0 node has none. This keeps the tree depth at
+        # L + 1 instead of n.
+        if n ≥ 2 && max_moment_levels ≥ 1
             μᵃ = [μₑ[setdiff(1:n,j)]  +  Σₑ[setdiff(1:n,j),j] * (a[j]-μₑ[j])/Σₑ[j,j]
                     for j in 1:n]
             μᵇ = [μₑ[setdiff(1:n,j)]  +  Σₑ[setdiff(1:n,j),j] * (b[j]-μₑ[j])/Σₑ[j,j]
@@ -65,16 +69,20 @@ mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistribut
             children_a = [BoxTruncatedMvNormalRecursiveMomentsState(
                             MvNormal(μᵃ[j],0.5*(Σ̃[j] + Σ̃[j]')),
                             BoxTruncationRegion(a[setdiff(1:n,j)],b[setdiff(1:n,j)]),
-                            max_moment_levels) for j in 1:n]
+                            max_moment_levels - 1) for j in 1:n]
             children_b = [BoxTruncatedMvNormalRecursiveMomentsState(
                             MvNormal(μᵇ[j],0.5*(Σ̃[j] + Σ̃[j]')),
                             BoxTruncationRegion(a[setdiff(1:n,j)],b[setdiff(1:n,j)]),
-                            max_moment_levels) for j in 1:n]
-        else #n==1
-            children_a = Array{BoxTruncatedMvNormalRecursiveMomentsState,1}[] #no children
-            children_b = Array{BoxTruncatedMvNormalRecursiveMomentsState,1}[] #no children
+                            max_moment_levels - 1) for j in 1:n]
+        else # n == 1, or an order-0 node
+            children_a = BoxTruncatedMvNormalRecursiveMomentsState[] #no children
+            children_b = BoxTruncatedMvNormalRecursiveMomentsState[] #no children
         end
         rawMomentDict, treeDict = init_dicts(n,max_moment_levels)
+        if max_moment_levels == 0   # init_dicts only seeds the root key for L ≥ 1
+            rawMomentDict[zeros(Int, n)] = NaN
+            treeDict[zeros(Int, n)] = nothing
+        end
 
         # Precompute the 1D Gaussian pdf at each box face and the per-axis
         # complement index. pdf(Normal, ±Inf) is 0, which is what we want.
@@ -118,7 +126,7 @@ function update_distribution!(s::BoxTruncatedMvNormalRecursiveMomentsState,
         s.phi_b[j] = pdf(Normal(μₑ[j], σj), s.r.b[j])
     end
 
-    if s.n ≥ 2
+    if s.n ≥ 2 && !isempty(s.children_a)
         Σmat = Matrix(Σpd)
         for j in 1:s.n
             comp = s.complement_idx[j]
