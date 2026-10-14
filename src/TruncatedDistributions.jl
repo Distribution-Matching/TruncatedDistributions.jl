@@ -11,6 +11,7 @@ using NLSolversBase: only_fg!   # Optim 2 no longer re-exports only_fg!
 import ForwardDiff   # loads the DifferentiationInterface backend used by AutoForwardDiff under Optim 2
 using Combinatorics
 using MvNormalCDF
+import AdditionalDistributions
 using Printf
 using Random
 
@@ -29,6 +30,7 @@ export
     BasicBoxTruncatedMvNormal,
     RecursiveMomentsBoxTruncatedMvNormal,
     TruncatedMvNormal,
+    TruncatedMvT,
 
     # distribution queries
     intruncationregion,
@@ -115,6 +117,8 @@ include("univariate/distributionsPackageExtensions.jl")
 include("multivariate/boxTruncatedMvNormalRecursiveMomentsState.jl")
 include("multivariate/normal.jl")
 include("multivariate/boxTruncatedMvNormalRecursiveMoments.jl")
+include("multivariate/boxTruncatedMvTRecursiveMomentsState.jl")
+include("multivariate/mvt.jl")
 include("multivariate/examples.jl")
 include("parameterMatching/lossMultivariateFit.jl")
 include("parameterMatching/parameter_gradients_true_loss.jl")

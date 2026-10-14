@@ -1,10 +1,11 @@
 name = "TruncatedDistributions"
 uuid = "77af390e-3af4-4cd8-bbfa-7ab7569c172d"
-authors = ["Yoni Nazarathy"]
 version = "0.4.0"
+authors = ["Yoni Nazarathy"]
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
+AdditionalDistributions = "6655a985-646a-4595-ab89-59c8a6085518"
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
@@ -21,6 +22,7 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
 ADTypes = "1"
+AdditionalDistributions = "0.3.0"
 Combinatorics = "1.0"
 Distributions = "0.25"
 ForwardDiff = "0.10, 1"

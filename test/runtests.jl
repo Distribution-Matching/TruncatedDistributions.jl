@@ -72,6 +72,7 @@ import TruncatedDistributions: hcubature_inf
 
     include("test_gradients.jl")
     include("test_kr_moments.jl")
+    include("test_kr_t_moments.jl")
     include("test_fit.jl")
     include("test_dynamic.jl")
 end
