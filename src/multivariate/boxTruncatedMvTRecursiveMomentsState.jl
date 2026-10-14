@@ -38,7 +38,7 @@ cache.
 Used by [`TruncatedMvT`](@ref).
 """
 mutable struct BoxTruncatedMvTRecursiveMomentsState <: TruncatedMvDistributionState
-    d::MvTDist
+    d::Distributions.GenericMvTDist{Float64}   # not `MvTDist`: its PDMat parameter is version-dependent
     ν::Float64
     r::BoxTruncationRegion
     n::Int
