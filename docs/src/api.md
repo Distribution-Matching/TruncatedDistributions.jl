@@ -12,6 +12,7 @@ EllipticalTruncationRegion
 BasicBoxTruncatedMvNormal
 RecursiveMomentsBoxTruncatedMvNormal
 TruncatedMvNormal
+TruncatedMvT
 ```
 
 ## Distribution queries
@@ -45,6 +46,7 @@ set_kr_base_backend!
 get_kr_base_backend
 set_kr_base_rng!
 get_kr_base_rng
+set_kr_t_qmc_samples!
 ```
 
 ## High-dimensional Monte-Carlo moments
@@ -81,6 +83,19 @@ moment_loss
 vector_moment_loss
 set_loss_gamma!
 get_loss_gamma
+```
+
+## Moment matching — truncated multivariate t
+
+```@docs
+fit_mvt
+warm_start_diagonal_t
+moment_loss_t
+vector_moment_loss_t
+TMomentPair
+t_moment_matching_pair
+grad_true_loss_t
+vector_fg_true_loss_t
 ```
 
 ## Univariate tools — dynamic moment matching

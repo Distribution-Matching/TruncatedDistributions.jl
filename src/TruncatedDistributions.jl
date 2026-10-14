@@ -11,6 +11,7 @@ using NLSolversBase: only_fg!   # Optim 2 no longer re-exports only_fg!
 import ForwardDiff   # loads the DifferentiationInterface backend used by AutoForwardDiff under Optim 2
 using Combinatorics
 using MvNormalCDF
+import AdditionalDistributions
 using Printf
 using Random
 
@@ -29,6 +30,7 @@ export
     BasicBoxTruncatedMvNormal,
     RecursiveMomentsBoxTruncatedMvNormal,
     TruncatedMvNormal,
+    TruncatedMvT,
 
     # distribution queries
     intruncationregion,
@@ -61,6 +63,7 @@ export
     get_kr_base_backend,
     set_kr_base_rng!,
     get_kr_base_rng,
+    set_kr_t_qmc_samples!,
 
     # high-dimensional Monte-Carlo moments
     mc_moments,
@@ -75,10 +78,14 @@ export
 
     # parameter fitting — public front door
     fit_mvnormal,
+    fit_mvt,
 
     # parameter fitting — lower-level building blocks
     warm_start_diagonal,
+    warm_start_diagonal_t,
     block_coord_descent,
+    moment_loss_t,
+    vector_moment_loss_t,
     moment_loss,
     vector_moment_loss,
 
@@ -87,6 +94,10 @@ export
     vector_fg_true_loss!,
     vector_grad_true_loss,
     grad_true_loss,
+    TMomentPair,
+    t_moment_matching_pair,
+    grad_true_loss_t,
+    vector_fg_true_loss_t,
     moment_grad_μ,
     moment_grad_U,
     make_param_vec_from_μ_Σ,
@@ -115,12 +126,15 @@ include("univariate/distributionsPackageExtensions.jl")
 include("multivariate/boxTruncatedMvNormalRecursiveMomentsState.jl")
 include("multivariate/normal.jl")
 include("multivariate/boxTruncatedMvNormalRecursiveMoments.jl")
+include("multivariate/boxTruncatedMvTRecursiveMomentsState.jl")
+include("multivariate/mvt.jl")
 include("multivariate/examples.jl")
 include("parameterMatching/lossMultivariateFit.jl")
 include("parameterMatching/parameter_gradients_true_loss.jl")
 include("parameterMatching/warm_start.jl")
 include("parameterMatching/block_coord_descent.jl")
 include("parameterMatching/fit.jl")
+include("parameterMatching/t_fit.jl")
 include("tools/dynamic_moment_matching.jl")
 
 end # module

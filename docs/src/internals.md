@@ -39,6 +39,26 @@ Switch backends with [`set_kr_base_backend!`](@ref):
                    variables + QMC); Float64-only; typically 10–100×
                    faster on `n ≥ 3` Gaussian box probabilities.
 
+### The Student-t recursion
+
+For a target law ``t_\nu(\mu, S)`` the Gaussian identity
+``\nabla\phi = -\Sigma^{-1}(x-\mu)\phi`` is replaced by
+``\nabla f_H = -\Sigma_H^{-1}(x-\mu) f_T`` with the helper law
+``H = t_{\nu-2}(\mu, \Sigma_H)``, ``\Sigma_H = \nu S/(\nu-2)``.
+Integrating ``x^\kappa`` against it over the box gives the same
+outer step as Kan–Robotti, with the lower-order term read from the helper
+and the face terms from the conditional laws of ``H`` on each face, which
+are again Student-t (``\nu - 1`` degrees of freedom). Each node therefore
+owns a helper (order ``L-2``) and ``2n`` face children (order ``L-1``,
+dimension ``n-1``). A node whose helper would have ``\nu \le 0``
+falls back to direct cubature (bounded boxes only). The state is
+`TruncatedDistributions.BoxTruncatedMvTRecursiveMomentsState`.
+
+The moment-matching gradient for the t uses the order-4 tree of
+``t_{\nu+2}(\mu, \nu\Sigma/(\nu+2))``, whose helper node is exactly
+``t_\nu(\mu, \Sigma)`` at order 2, so one tree serves the loss and the
+gradient ([`t_moment_matching_pair`](@ref)).
+
 ## Lazy cache and `worst_tol`
 
 Every accessor (`mean`, `cov`, `tp`) checks the cached error estimate

@@ -5,6 +5,32 @@ All notable changes to this project are documented here. The format is based on
 follows [Julia-style semantic versioning](https://pkgdocs.julialang.org/v1/compatibility/)
 (for `0.x` releases, a bump of the minor version may include breaking changes).
 
+## [0.5.0] — 2026-10-15
+
+### Added
+
+- **Box-truncated multivariate Student-t.** `TruncatedMvT(ν, μ, Σ, a, b;
+  max_moment_levels)` with `mean`, `cov`, `tp`, `raw_moment` and
+  `raw_moment_dict`. Raw moments come from a Student-t analogue of the
+  Kan–Robotti recursion: each node uses a helper law with `ν − 2` degrees
+  of freedom (from `∇f_{ν−2} = −Σ_H⁻¹(x−μ) f_ν`) and Student-t face
+  conditionals with `ν − 1`. Non-integer `ν` is supported. On a box
+  unbounded in some coordinate, a moment of order `L` needs `ν > L`
+  (checked at construction).
+- **t box probabilities** via the Genz–Bretz QMC routine of
+  AdditionalDistributions.jl under the `:mvnormalcdf` backend (dimension
+  ≥ 3; 2-D boxes use cubature, which is faster and more accurate there),
+  or adaptive cubature under `:hcubature`. `set_kr_t_qmc_samples!` sets the
+  QMC sample count (default `40_000`).
+- **Moment matching for the truncated t.** `fit_mvt(ν, μ̂, Σ̂, a, b)`:
+  warm-started (`warm_start_diagonal_t`) joint LBFGS on the closed-form
+  gradient of the γ-weighted loss, assembled from truncated `t_ν` moments
+  of order ≤ 2 and truncated `t_{ν+2}(μ, νΣ/(ν+2))` moments of order ≤ 4.
+  One recursion tree serves both (`t_moment_matching_pair`, `TMomentPair`).
+  Lower-level: `moment_loss_t`, `vector_moment_loss_t`,
+  `vector_fg_true_loss_t`, `grad_true_loss_t`.
+- New dependency: AdditionalDistributions.jl (`0.3`).
+
 ## [0.4.0] — 2026-07-07
 
 ### Added

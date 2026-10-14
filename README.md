@@ -8,8 +8,9 @@ A Julia package for truncated distributions, providing functionality beyond
 what is in [Distributions.jl](https://github.com/JuliaStats/Distributions.jl)
 (whose `truncated` already covers basic univariate truncation).
 
-Its main functionality is the **box-truncated multivariate normal**: a
-distribution object that exposes the usual `mean`, `cov`, `pdf`, `rand`,
+Its main functionality is the **box-truncated multivariate normal** and,
+since 0.5.0, the **box-truncated multivariate Student-t**: distribution
+objects that expose the usual `mean`, `cov`, `pdf`, `rand`,
 plus arbitrary raw moments via the recursive moment formula of
 [Kan and Robotti (2017)](https://doi.org/10.1080/10618600.2017.1322092).
 On top of that sits an optional moment-matching parameter-fitting layer.
@@ -51,6 +52,12 @@ a dynamic, ODE-based moment matcher — addressing problems that
   the mean is weighted five times the covariance). Picks joint LBFGS +
   warm-start for small problems and a hybrid block-coordinate solver for
   larger ones.
+- Box-truncated multivariate Student-t, `TruncatedMvT(ν, μ, Σ, a, b)`,
+  with raw moments from a Student-t analogue of the Kan–Robotti recursion
+  and t box probabilities from Genz–Bretz QMC (via
+  AdditionalDistributions.jl) or adaptive cubature.
+- Moment matching for the truncated t with fixed `ν`:
+  `fit_mvt(ν, μ̂, Σ̂, a, b)`, on a closed-form gradient.
 - Univariate tools: a dynamic (ODE-based) moment-matcher for one-dimensional
   truncated distributions — `dynamic_fit_locationscale` and
   `dynamic_fit_exponential` — implementing Liquet and Nazarathy (2015).
@@ -255,6 +262,44 @@ moment_loss(d, μ̂, Σ̂)              # γ-weighted scalar loss off the cached
 set_loss_gamma!(1.0)              # set the covariance weight γ globally
 ```
 
+## Box-truncated multivariate t
+
+The Student-t with fixed degrees of freedom `ν`, location `μ` and scale
+matrix `Σ` (not the covariance) is available on the same footing:
+
+```julia
+ν = 5.0
+d = TruncatedMvT(ν, [0.0, 0.0], [1.0 0.3; 0.3 1.0], [-1.0, -1.5], [1.5, Inf];
+                 max_moment_levels = 2)
+mean(d); cov(d); tp(d)
+raw_moment(d, [1, 1])
+```
+
+Raw moments come from a Student-t analogue of the Kan–Robotti recursion:
+each node uses a *helper* law with `ν − 2` degrees of freedom and face
+conditionals with `ν − 1`, so the recursion closes within the t family.
+On a box that is unbounded in some coordinate, a moment of order `L`
+needs `ν > L`. Under the `:mvnormalcdf` backend the t box probabilities
+come from the Genz–Bretz QMC routine of
+[AdditionalDistributions.jl](https://github.com/Santymax98/AdditionalDistributions.jl)
+(set the sample count with `set_kr_t_qmc_samples!`, default `40_000`);
+under `:hcubature` they use adaptive cubature.
+
+Moment matching for the truncated t:
+
+```julia
+μ̂ = [0.10, -0.10]
+Σ̂ = [0.40 0.05; 0.05 0.40]
+μ_fit, Σ_fit, info = fit_mvt(5.0, μ̂, Σ̂, [-1.0, -1.5], [1.5, Inf])
+```
+
+`fit_mvt` runs warm-started joint LBFGS on the closed-form gradient of the
+same loss as `fit_mvnormal`. The gradient needs the truncated `t_ν`
+moments of order ≤ 2 and the truncated `t_{ν+2}(μ, νΣ/(ν+2))` moments of
+order ≤ 4; both come from a single recursion tree. Unlike the Gaussian
+case, the moment-matching equations for the t are not maximum-likelihood
+equations. On an unbounded box `ν > 2` is required.
+
 ## Univariate tools: dynamic moment matching
 
 Separate from the multivariate machinery, the package provides a univariate
@@ -311,7 +356,9 @@ d  = dist_from_example(ne)          # built as a RecursiveMomentsBoxTruncatedMvN
 The unit suite covers regions, the 1D moment recurrence, the multivariate
 recursion cross-checked against direct cubature, gradient correctness
 (including the γ weighting), Monte-Carlo moments against the recursion,
-seeded reproducibility, and the `fit_mvnormal` end-to-end recovery.
+seeded reproducibility, the `fit_mvnormal` end-to-end recovery, the
+truncated-t recursion against cubature, the truncated-t gradient against
+finite differences, and `fit_mvt` parameter recovery.
 
 Long-running benchmark scripts for the companion paper live in a
 separate repository:
@@ -326,9 +373,13 @@ separate repository:
 - Genz, A. and Bretz, F. (2009). *Computation of Multivariate Normal and
   t Probabilities*. Lecture Notes in Statistics 195, Springer. (Algorithm
   used by the optional `:mvnormalcdf` backend.)
-- The joint-LBFGS and hybrid-BCD fitting algorithms are described in the
-  companion paper *Moment Matching of Box Truncated Multivariate Normal
-  Distributions* (Carrizo Molina & Nazarathy).
+- Genz, A. and Bretz, F. (2002). "Comparison of methods for the
+  computation of multivariate t probabilities." *Journal of Computational
+  and Graphical Statistics*, 11(4), 950–971. (Algorithm behind the t box
+  probabilities.)
+- The fitting algorithms and the truncated-t gradient are described in the
+  companion paper *Moment Matching of Box-Truncated Multivariate Normal and
+  Student-t Distributions* (Carrizo Molina & Nazarathy).
 - Liquet, B. and Nazarathy, Y. (2015). "A dynamic view to moment matching of
   truncated distributions." *Statistics & Probability Letters*, 104, 87–93.
   https://doi.org/10.1016/j.spl.2015.05.006 (the univariate dynamic

@@ -8,7 +8,10 @@ Its main focus is the **box-truncated multivariate normal**: a first-class
 distribution object with `mean`, `cov`, `pdf`, `logpdf`, `rand`, plus
 arbitrary multivariate raw moments via the recursive moment formula of
 [Kan and Robotti (2017)](https://doi.org/10.1080/10618600.2017.1322092).
-A moment-matching parameter-fitting layer sits on top.
+The **box-truncated multivariate Student-t** (`TruncatedMvT`) is supported
+on the same footing, with raw moments from a Student-t analogue of the
+recursion. A moment-matching parameter-fitting layer (`fit_mvnormal`,
+`fit_mvt`) sits on top.
 
 The type hierarchy (`TruncatedMvDistribution{D, R, S}`) is generic in the
 underlying distribution `D`, the truncation region `R`, and the cached
@@ -39,5 +42,6 @@ Depth = 2
 
 If you use this package in published work, please cite Kan and Robotti
 (2017) for the recursive moment formula and the companion paper
-*Moment Matching of Box Truncated Multivariate Normal Distributions*
+*Moment Matching of Box-Truncated Multivariate Normal and Student-t
+Distributions*
 for the fitting algorithms.
