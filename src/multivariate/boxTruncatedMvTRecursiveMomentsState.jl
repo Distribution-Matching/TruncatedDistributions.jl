@@ -230,6 +230,26 @@ function raw_moment_dict(d::BoxTruncatedMvTRecursiveMomentsState)
     return copy(d.rawMomentDict)
 end
 
+# QMC sample count for the t box probability under the `:mvnormalcdf`
+# backend. The t QMC rule is noisier per sample than MvNormalCDF's
+# Gaussian one, and helper-chain coefficients amplify base-case error, so
+# the default is larger than the 10_000 used for the normal.
+const _KR_T_QMC_M = Ref{Int}(40_000)
+
+"""
+    set_kr_t_qmc_samples!(m::Integer)
+
+Set the number of QMC samples per multivariate-t box probability used by
+[`TruncatedMvT`](@ref) under the `:mvnormalcdf` backend. Returns the
+previous value.
+"""
+function set_kr_t_qmc_samples!(m::Integer)
+    m ≥ 100 || throw(ArgumentError("need at least 100 QMC samples; got $m"))
+    prev = _KR_T_QMC_M[]
+    _KR_T_QMC_M[] = m
+    return prev
+end
+
 # Base case: the t box probability. Shares the backend switch of the normal
 # recursion: `:mvnormalcdf` selects Genz-style randomized QMC (here from
 # AdditionalDistributions.jl), `:hcubature` adaptive cubature.
@@ -240,7 +260,7 @@ function LL(d::BoxTruncatedMvTRecursiveMomentsState)
         return cdf(T, (d.r.b[1] - d.d.μ[1]) / σ) - cdf(T, (d.r.a[1] - d.d.μ[1]) / σ)
     elseif _KR_BASE_BACKEND[] === :mvnormalcdf && d.n ≥ 3
         return AdditionalDistributions.cdf_result(d.d, d.r.a, d.r.b;
-                                                  m = 10_000, rng = _KR_BASE_RNG[]).value
+                                                  m = _KR_T_QMC_M[], rng = _KR_BASE_RNG[]).value
     else
         # Also used at n = 2 under the QMC backend: 2-D cubature of the t
         # density is faster than the t QMC routine and accurate to ~1e-8,

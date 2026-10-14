@@ -63,6 +63,7 @@ export
     get_kr_base_backend,
     set_kr_base_rng!,
     get_kr_base_rng,
+    set_kr_t_qmc_samples!,
 
     # high-dimensional Monte-Carlo moments
     mc_moments,
@@ -77,6 +78,11 @@ export
 
     # parameter fitting — public front door
     fit_mvnormal,
+    fit_mvt,
+    grad_true_loss_t,
+    t_moment_matching_pair,
+    vector_moment_loss_t,
+    vector_fg_true_loss_t,
 
     # parameter fitting — lower-level building blocks
     warm_start_diagonal,
@@ -125,6 +131,7 @@ include("parameterMatching/parameter_gradients_true_loss.jl")
 include("parameterMatching/warm_start.jl")
 include("parameterMatching/block_coord_descent.jl")
 include("parameterMatching/fit.jl")
+include("parameterMatching/t_fit.jl")
 include("tools/dynamic_moment_matching.jl")
 
 end # module
