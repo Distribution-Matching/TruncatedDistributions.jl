@@ -79,14 +79,13 @@ export
     # parameter fitting — public front door
     fit_mvnormal,
     fit_mvt,
-    grad_true_loss_t,
-    t_moment_matching_pair,
-    vector_moment_loss_t,
-    vector_fg_true_loss_t,
 
     # parameter fitting — lower-level building blocks
     warm_start_diagonal,
+    warm_start_diagonal_t,
     block_coord_descent,
+    moment_loss_t,
+    vector_moment_loss_t,
     moment_loss,
     vector_moment_loss,
 
@@ -95,6 +94,10 @@ export
     vector_fg_true_loss!,
     vector_grad_true_loss,
     grad_true_loss,
+    TMomentPair,
+    t_moment_matching_pair,
+    grad_true_loss_t,
+    vector_fg_true_loss_t,
     moment_grad_μ,
     moment_grad_U,
     make_param_vec_from_μ_Σ,

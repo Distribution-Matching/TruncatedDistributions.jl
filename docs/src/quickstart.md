@@ -100,6 +100,21 @@ set_kr_base_backend!(:mvnormalcdf)   # Genz–Bretz QMC; Float64 only; faster
 Keep `:hcubature` when you need ForwardDiff `Dual` numbers; otherwise
 `:mvnormalcdf` is dramatically faster.
 
+## The box-truncated multivariate t
+
+```julia
+d = TruncatedMvT(5.0, [0.0, 0.0], [1.0 0.3; 0.3 1.0], [-1.0, -1.5], [1.5, Inf];
+                 max_moment_levels = 2)
+mean(d); cov(d); tp(d)
+raw_moment(d, [1, 1])
+```
+
+`Σ` is the scale matrix; the untruncated covariance is `ν/(ν-2) Σ`. On a
+box unbounded in some coordinate, moments of order `L` need `ν > L`.
+Under `:mvnormalcdf` the t box probabilities use Genz–Bretz QMC from
+AdditionalDistributions.jl, with [`set_kr_t_qmc_samples!`](@ref) setting
+the sample count.
+
 ## Bundled examples
 
 ```julia

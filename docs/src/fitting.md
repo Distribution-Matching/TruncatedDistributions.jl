@@ -77,6 +77,26 @@ block_coord_descent(μ̂, Σ̂, a, b)   # underlying BCD; returns (μ, Σ, hist,
 moment_loss(d, μ̂, Σ̂)              # scalar loss read off the cached moments
 ```
 
-See [Moment Matching of Box Truncated Multivariate Normal
+## Truncated multivariate t
+
+For the Student-t with fixed degrees of freedom `ν`, [`fit_mvt`](@ref)
+solves the same problem for the location `μ` and scale matrix `Σ`:
+
+```julia
+μ_fit, Σ_fit, info = fit_mvt(5.0, μ̂, Σ̂, a, b)
+```
+
+It runs warm-started joint LBFGS ([`warm_start_diagonal_t`](@ref) for the
+start) on the closed-form gradient. The gradient is assembled from the
+truncated ``t_\nu`` moments of order ``\le 2`` and the truncated
+``t_{\nu+2}(\mu, \nu\Sigma/(\nu+2))`` moments of order ``\le 4``, both
+from one recursion tree. It takes the keywords `gamma`, `ftarget`, `seed`,
+`iterations`, `time_limit`, `μ_init`, `Σ_init` and `verbose` with the same
+meaning as for `fit_mvnormal`. On a box unbounded in some coordinate,
+``\nu > 2`` is required. For the Gaussian the matching equations are the
+maximum-likelihood equations of an exponential family; for the t they are
+not, and `fit_mvt` is a method-of-moments solver in its own right.
+
+See [Moment Matching of Box-Truncated Multivariate Normal and Student-t
 Distributions](https://github.com/Distribution-Matching/paper-truncated-mv-normal)
 for the derivation of the algorithms.
