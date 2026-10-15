@@ -33,6 +33,17 @@ follows [Julia-style semantic versioning](https://pkgdocs.julialang.org/v1/compa
 
 ### Changed
 
+- **Much faster Kan–Robotti recursion at higher `n`.** Face states are now
+  shared: the conditional law given a set of fixed faces does not depend
+  on the order in which they were fixed, so the recursion is a DAG with
+  `Σ_d C(n,d) 2^d` states instead of a tree with `Σ_d n!/(n-d)! 2^d`; and
+  each state is expanded only to the order its parent reads (children at
+  order `L - 1`, none at order 0), so the depth is `L + 1` rather than `n`.
+  An order-4 gradient now costs 0.15 s at `n = 5`, 1.5 s at `n = 7` and
+  14 s at `n = 10` (previously 0.46 s, 79 s, and days). The truncated-t
+  recursion shares states the same way (keyed by faces and helper steps).
+- `fit_mvnormal`'s `:auto` dispatch now uses joint LBFGS up to
+  `n_threshold = 8` (was 6).
 - The hybrid block coordinate descent (`method = :bcd`,
   `block_coord_descent`) is now marked **experimental** in the docs: it
   returns approximate fits and its interface may change. Behaviour is
