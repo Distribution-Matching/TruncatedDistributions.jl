@@ -31,6 +31,13 @@ follows [Julia-style semantic versioning](https://pkgdocs.julialang.org/v1/compa
   `vector_fg_true_loss_t`, `grad_true_loss_t`.
 - New dependency: AdditionalDistributions.jl (`0.3`).
 
+### Changed
+
+- The hybrid block coordinate descent (`method = :bcd`,
+  `block_coord_descent`) is now marked **experimental** in the docs: it
+  returns approximate fits and its interface may change. Behaviour is
+  unchanged, and `:auto` still uses it for `n ≥ 7`.
+
 ## [0.4.0] — 2026-07-07
 
 ### Added

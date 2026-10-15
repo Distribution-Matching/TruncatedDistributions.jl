@@ -34,8 +34,8 @@ and the BCD accept/reject path built on them — repeat run to run.
             `U U^T = Σ^{-1}`), warm-started by a coordinate-wise diagonal
             fit. Recommended for small problems (n ≤ 6).
 * `:bcd`   — hybrid block coordinate descent over blocks of size 1, 2, 3.
-            Recommended for n ≥ 7 where the full-dimension polish is
-            infeasible.
+            **Experimental**: approximate fits, interface may change.
+            Used for n ≥ 7 where the full-dimension polish is infeasible.
 
 # Common keyword arguments
 

@@ -218,7 +218,7 @@ Force a particular method:
 
 ```julia
 fit_mvnormal(μ̂, Σ̂, a, b; method = :lbfgs)   # joint LBFGS + warm-start
-fit_mvnormal(μ̂, Σ̂, a, b; method = :bcd)     # hybrid block coordinate descent
+fit_mvnormal(μ̂, Σ̂, a, b; method = :bcd)     # hybrid block coordinate descent (experimental)
 fit_mvnormal(μ̂, Σ̂, a, b; method = :auto)    # default (dimension-based)
 ```
 
@@ -243,10 +243,16 @@ the BCD endpoint).
 
 ### Why two algorithms
 
+> **Experimental.** The `:bcd` method (hybrid block coordinate descent,
+> `block_coord_descent`) is experimental: it returns approximate fits whose
+> reported loss at `n ≥ 7` is a marginal-loss proxy, its interface may
+> change, and it is not part of the companion paper. The `:auto` default
+> still dispatches to it for `n ≥ 7`.
+
 | Regime | Cost driver | Recommended method |
 | --- | --- | --- |
 | `n ≤ 6` | one full-`n` moment recursion is fast | `:lbfgs` (joint warm-start + LBFGS on the analytic gradient) |
-| `n ≥ 7` | the recursion grows roughly factorially in `n` | `:bcd` (block updates on size-1 / 2 / 3 marginals) |
+| `n ≥ 7` | the recursion grows roughly factorially in `n` | `:bcd` (experimental; block updates on size-1 / 2 / 3 marginals) |
 
 The block coordinate descent works on 2-D and 3-D *marginals* of the
 truncated normal, choosing the block that has the largest per-target
@@ -257,7 +263,7 @@ correcting joint correlation structure.
 
 ```julia
 warm_start_diagonal(μ̂, Σ̂, a, b)   # coordinate-wise 1D LBFGS warm-start
-block_coord_descent(μ̂, Σ̂, a, b)   # underlying BCD; returns (μ, Σ, hist, picks)
+block_coord_descent(μ̂, Σ̂, a, b)   # underlying BCD (experimental); returns (μ, Σ, hist, picks)
 moment_loss(d, μ̂, Σ̂)              # γ-weighted scalar loss off the cached moments
 set_loss_gamma!(1.0)              # set the covariance weight γ globally
 ```

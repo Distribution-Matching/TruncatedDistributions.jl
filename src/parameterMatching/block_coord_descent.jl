@@ -2,6 +2,11 @@
     block_coord_descent(μ̂, Σ̂, a, b; ...) -> (μ, Σ, hist)
 
 Block coordinate descent for truncated MVN moment matching.
+
+!!! warning "Experimental"
+    This method is experimental: it returns approximate fits (at large `n`
+    the monitored loss is a marginal-loss proxy, not the full loss), and its
+    interface may change. It is not part of the companion paper.
 At each iteration we enumerate every candidate subset `S ⊂ {1,…,n}` whose
 size is in `block_sizes` (default `[1, 2, 3]`), score it by the
 *per-target* marginal residual
