@@ -69,7 +69,10 @@ mutable struct BoxTruncatedMvTRecursiveMomentsState <: TruncatedMvDistributionSt
     Σ_err::Float64
 
     function BoxTruncatedMvTRecursiveMomentsState(ν::Real, μₑ::AbstractVector, Σₑ::AbstractMatrix,
-                                                  r::BoxTruncationRegion, max_moment_levels::Int)
+                                                  r::BoxTruncationRegion, max_moment_levels::Int;
+                                                  _cache = nothing,
+                                                  _orig::Union{Nothing,Vector{Int}} = nothing,
+                                                  _key::Tuple{Vector{Tuple{Int,Int}},Int} = (Tuple{Int,Int}[], 0))
         a, b = r.a, r.b
         n = length(μₑ)
         length(a) == n ||
@@ -104,21 +107,38 @@ mutable struct BoxTruncatedMvTRecursiveMomentsState <: TruncatedMvDistributionSt
         fH_a = Float64[]
         fH_b = Float64[]
 
+        # States are shared across the recursion: a state's law is fixed by
+        # the set of fixed (original coordinate, side) faces and by the
+        # number of degrees-of-freedom decrements h along the path (helper
+        # steps and face steps commute; see the paper), so `cache` maps
+        # (faces, number of helper steps) to the state.
+        cache = _cache === nothing ?
+            Dict{Tuple{Vector{Tuple{Int,Int}},Int},BoxTruncatedMvTRecursiveMomentsState}() : _cache
+        orig = _orig === nothing ? collect(1:n) : _orig
+        fixed, nh = _key
         if L ≥ 1 && !direct
             νH = ν - 2
             ΣH = (ν / νH) .* Σm
             fH_a = [_tdens1(νH, μₑ[j], ΣH[j, j], a[j]) for j in 1:n]
             fH_b = [_tdens1(νH, μₑ[j], ΣH[j, j], b[j]) for j in 1:n]
             if L ≥ 2
-                helper = BoxTruncatedMvTRecursiveMomentsState(νH, μₑ, ΣH, r, L - 2)
+                hkey = (fixed, nh + 1)
+                helper = get!(cache, hkey) do
+                    BoxTruncatedMvTRecursiveMomentsState(νH, μₑ, ΣH, r, L - 2;
+                        _cache = cache, _orig = orig, _key = hkey)
+                end
             end
             if n ≥ 2
                 for j in 1:n
                     comp = complement_idx[j]
                     rc = BoxTruncationRegion(a[comp], b[comp])
-                    for (face, store) in ((a[j], children_a), (b[j], children_b))
-                        μc, Σc = _t_conditional(νH, μₑ, ΣH, j, comp, face)
-                        push!(store, BoxTruncatedMvTRecursiveMomentsState(νH + 1, μc, Σc, rc, L - 1))
+                    for (side, face, store) in ((1, a[j], children_a), (2, b[j], children_b))
+                        fkey = (sort(vcat(fixed, [(orig[j], side)])), nh)
+                        push!(store, get!(cache, fkey) do
+                            μc, Σc = _t_conditional(νH, μₑ, ΣH, j, comp, face)
+                            BoxTruncatedMvTRecursiveMomentsState(νH + 1, μc, Σc, rc, L - 1;
+                                _cache = cache, _orig = orig[comp], _key = fkey)
+                        end)
                     end
                 end
             end

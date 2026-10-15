@@ -90,10 +90,10 @@ end
     _, _, info_small = fit_mvnormal(μ̂, Σ̂, a, b; method = :auto, iterations = 1)
     @test info_small.method === :lbfgs
 
-    # The n=8 path should dispatch to :bcd. Use realisable targets here too
-    # — at n_threshold = 6, n = 8 picks :bcd regardless of the targets'
+    # The n=9 path should dispatch to :bcd. Use realisable targets here too
+    # — at n_threshold = 8, n = 9 picks :bcd regardless of the targets'
     # quality, so a single iteration is enough to verify dispatch.
-    n = 8
+    n = 9
     μ̂_big = zeros(n)
     Σ̂_big = Matrix{Float64}(I, n, n) .* 0.4
     a_big = fill(-1.5, n); b_big = fill(1.5, n)

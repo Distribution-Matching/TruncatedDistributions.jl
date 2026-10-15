@@ -13,7 +13,7 @@ a = [-1.0, -1.5]
 b = [ 1.5,  1.0]
 
 μ_fit, Σ_fit, info = fit_mvnormal(μ̂, Σ̂, a, b)
-@show info.method   # :lbfgs at this size; :bcd for n ≥ 7
+@show info.method   # :lbfgs at this size; :bcd for n ≥ 9
 @show info.loss     # ½‖μA − μ̂‖² + γ·r(n)·½‖ΣA − Σ̂‖²_F
 @show info.time
 ```
@@ -35,14 +35,14 @@ pass a `seed`.
 
 > **Experimental.** The `:bcd` method (hybrid block coordinate descent,
 > `block_coord_descent`) is experimental: it returns approximate fits whose
-> reported loss at `n ≥ 7` is a marginal-loss proxy, its interface may
+> reported loss at large `n` is a marginal-loss proxy, its interface may
 > change, and it is not part of the companion paper. The `:auto` default
-> still dispatches to it for `n ≥ 7`.
+> still dispatches to it above `n_threshold = 8`.
 
 | Regime | Cost driver | Recommended method |
 | --- | --- | --- |
-| `n ≤ 6` | one full-`n` moment recursion is fast | `:lbfgs` (joint warm-start + LBFGS on the analytic gradient) |
-| `n ≥ 7` | the recursion grows roughly factorially in `n` | `:bcd` (experimental; block updates on size-1 / 2 / 3 marginals) |
+| `n ≤ 8` | one full-`n` moment recursion is fast (seconds at `n = 8`) | `:lbfgs` (joint warm-start + LBFGS on the analytic gradient) |
+| `n ≥ 9` | the recursion's cost keeps growing with `n` | `:bcd` (experimental; block updates on size-1 / 2 / 3 marginals) |
 
 The block coordinate descent works on 2-D and 3-D *marginals* of the
 truncated normal, choosing the block that has the largest per-target
@@ -62,7 +62,7 @@ fit_mvnormal(μ̂, Σ̂, a, b; method = :auto)   # default — picks by dimensio
 | Keyword | Default | What it does |
 | --- | --- | --- |
 | `method` | `:auto` | `:auto`, `:lbfgs`, or `:bcd` |
-| `n_threshold` | `6` | dimension cutoff used by `:auto` |
+| `n_threshold` | `8` | dimension cutoff used by `:auto` |
 | `gamma` | `0.2` | covariance weight in the loss (`γ = 1` balances mean and covariance) |
 | `ftarget` | `1e-3` | stop when loss drops below this |
 | `seed` | `nothing` | seed the randomised base case for a reproducible fit |

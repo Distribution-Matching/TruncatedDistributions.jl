@@ -1,5 +1,5 @@
 """
-    fit_mvnormal(μ̂, Σ̂, a, b; method = :auto, n_threshold = 6, ...)
+    fit_mvnormal(μ̂, Σ̂, a, b; method = :auto, n_threshold = 8, ...)
 
 Find a multivariate-normal `(μ, Σ)` whose box truncation to `[a, b]` has
 mean `μ̂` and covariance `Σ̂`. Returns `(μ, Σ, info)`, where `info` is a
@@ -27,15 +27,15 @@ and the BCD accept/reject path built on them — repeat run to run.
 # Methods
 
 * `:auto`  — pick `:lbfgs` for `length(μ̂) ≤ n_threshold` and `:bcd` for
-            larger problems. The default `n_threshold = 6` reflects the
+            larger problems. The default `n_threshold = 8` reflects the
             crossover where a single full-dimension Kan–Robotti gradient
             call starts to cost minutes.
 * `:lbfgs` — joint LBFGS over the packed `(μ, U)` parameter vector (with
             `U U^T = Σ^{-1}`), warm-started by a coordinate-wise diagonal
-            fit. Recommended for small problems (n ≤ 6).
+            fit. Recommended for n ≤ 8.
 * `:bcd`   — hybrid block coordinate descent over blocks of size 1, 2, 3.
             **Experimental**: approximate fits, interface may change.
-            Used for n ≥ 7 where the full-dimension polish is infeasible.
+            Used above `n_threshold`.
 
 # Common keyword arguments
 
@@ -95,7 +95,7 @@ b = [ 1.5,  1.0]
 function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
                      a::AbstractVector, b::AbstractVector;
                      method::Symbol = :auto,
-                     n_threshold::Int = 6,
+                     n_threshold::Int = 8,
                      μ_init::Union{Nothing, AbstractVector} = nothing,
                      Σ_init::Union{Nothing, AbstractMatrix} = nothing,
                      ftarget::Float64 = 1e-3,

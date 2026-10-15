@@ -43,7 +43,14 @@ mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistribut
     μ_err::Float64
     Σ_err::Float64
 
-    function BoxTruncatedMvNormalRecursiveMomentsState(d::MvNormal, r::BoxTruncationRegion, max_moment_levels::Int)
+    # Last `update_distribution!` pass that refreshed this state; states
+    # are shared between parents (see below), so a pass visits each once.
+    epoch::Int
+
+    function BoxTruncatedMvNormalRecursiveMomentsState(d::MvNormal, r::BoxTruncationRegion, max_moment_levels::Int;
+                                                       _cache = nothing,
+                                                       _orig::Union{Nothing,Vector{Int}} = nothing,
+                                                       _fixed::Vector{Tuple{Int,Int}} = Tuple{Int,Int}[])
         μₑ, Σₑ = d.μ, d.Σ
         a, b = r.a, r.b
         n = length(d)
@@ -58,22 +65,35 @@ mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistribut
 
         # A node needing moments up to order L uses face moments up to
         # order L - 1 only (see `c_vector`), so children are built at
-        # L - 1 and an order-0 node has none. This keeps the tree depth at
-        # L + 1 instead of n.
+        # L - 1 and an order-0 node has none: the tree depth is L + 1, not n.
+        #
+        # A face state is the conditional law given the fixed coordinates,
+        # which does not depend on the order in which they were fixed, so
+        # states are shared: `cache` maps the sorted set of fixed
+        # (original coordinate, side) pairs to the state, turning the tree
+        # into a DAG with sum_d C(n,d) 2^d states instead of
+        # sum_d n!/(n-d)! 2^d.
+        cache = _cache === nothing ?
+            Dict{Vector{Tuple{Int,Int}},BoxTruncatedMvNormalRecursiveMomentsState}() : _cache
+        orig = _orig === nothing ? collect(1:n) : _orig
         if n ≥ 2 && max_moment_levels ≥ 1
-            μᵃ = [μₑ[setdiff(1:n,j)]  +  Σₑ[setdiff(1:n,j),j] * (a[j]-μₑ[j])/Σₑ[j,j]
-                    for j in 1:n]
-            μᵇ = [μₑ[setdiff(1:n,j)]  +  Σₑ[setdiff(1:n,j),j] * (b[j]-μₑ[j])/Σₑ[j,j]
-                    for j in 1:n]
-            Σ̃ = [Σₑ[setdiff(1:n,j),setdiff(1:n,j)] - (1/Σₑ[j,j])*Σₑ[setdiff(1:n,j),j]*Σₑ[j,setdiff(1:n,j)]' for j in 1:n]
-            children_a = [BoxTruncatedMvNormalRecursiveMomentsState(
-                            MvNormal(μᵃ[j],0.5*(Σ̃[j] + Σ̃[j]')),
-                            BoxTruncationRegion(a[setdiff(1:n,j)],b[setdiff(1:n,j)]),
-                            max_moment_levels - 1) for j in 1:n]
-            children_b = [BoxTruncatedMvNormalRecursiveMomentsState(
-                            MvNormal(μᵇ[j],0.5*(Σ̃[j] + Σ̃[j]')),
-                            BoxTruncationRegion(a[setdiff(1:n,j)],b[setdiff(1:n,j)]),
-                            max_moment_levels - 1) for j in 1:n]
+            children_a = Vector{BoxTruncatedMvNormalRecursiveMomentsState}(undef, n)
+            children_b = Vector{BoxTruncatedMvNormalRecursiveMomentsState}(undef, n)
+            for j in 1:n
+                comp = setdiff(1:n, j)
+                Σ̃ = Σₑ[comp, comp] - (1 / Σₑ[j, j]) * Σₑ[comp, j] * Σₑ[j, comp]'
+                Σ̃ = 0.5 * (Σ̃ + Σ̃')
+                rc = BoxTruncationRegion(a[comp], b[comp])
+                for (side, y, store) in ((1, a[j], children_a), (2, b[j], children_b))
+                    key = sort(vcat(_fixed, [(orig[j], side)]))
+                    store[j] = get!(cache, key) do
+                        μc = μₑ[comp] + Σₑ[comp, j] * (y - μₑ[j]) / Σₑ[j, j]
+                        BoxTruncatedMvNormalRecursiveMomentsState(MvNormal(μc, Σ̃), rc,
+                            max_moment_levels - 1; _cache = cache, _orig = orig[comp],
+                            _fixed = key)
+                    end
+                end
+            end
         else # n == 1, or an order-0 node
             children_a = BoxTruncatedMvNormalRecursiveMomentsState[] #no children
             children_b = BoxTruncatedMvNormalRecursiveMomentsState[] #no children
@@ -95,9 +115,11 @@ mutable struct BoxTruncatedMvNormalRecursiveMomentsState <: TruncatedMvDistribut
             NaN,
             Vector{Float64}(undef,0),
             PDMat(Array{Float64,2}(I,n,n)),
-            Inf, Inf, Inf)
+            Inf, Inf, Inf, 0)
     end
 end
+
+const _UPDATE_EPOCH = Ref(0)
 
 """
     update_distribution!(s::BoxTruncatedMvNormalRecursiveMomentsState, μ, Σ)
@@ -107,7 +129,7 @@ In-place refresh of an existing recursion-tree state with a new
 indices, box bounds) is invariant across `(μ, Σ)` updates on the same
 `n` / `a` / `b` / `max_moment_levels`, so reusing the state and just
 walking the tree to rewrite the distribution-dependent data avoids the
-`O(n!)` reconstruction cost — significant from `n ≥ 5`.
+reconstruction cost.
 
 Invalidates the cached `mean`, `cov`, `tp`, and raw moments; the next
 query recomputes from scratch. Pair with [`outer_dist_from_state`](@ref)
@@ -116,6 +138,14 @@ to obtain a fresh outer distribution wrapper.
 function update_distribution!(s::BoxTruncatedMvNormalRecursiveMomentsState,
                               μₑ::AbstractVector,
                               Σₑ::AbstractMatrix)
+    _UPDATE_EPOCH[] += 1
+    return _update_distribution!(s, μₑ, Σₑ, _UPDATE_EPOCH[])
+end
+
+function _update_distribution!(s::BoxTruncatedMvNormalRecursiveMomentsState,
+                               μₑ::AbstractVector, Σₑ::AbstractMatrix, epoch::Int)
+    s.epoch == epoch && return s     # shared state already refreshed in this pass
+    s.epoch = epoch
     μv  = Vector{Float64}(μₑ)
     Σpd = Σₑ isa PDMat ? Σₑ : PDMat(0.5 .* (Matrix{Float64}(Σₑ) .+ Matrix{Float64}(Σₑ)'))
     s.d = MvNormal(μv, Σpd)
@@ -135,8 +165,8 @@ function update_distribution!(s::BoxTruncatedMvNormalRecursiveMomentsState,
             μᵇj = μₑ[comp] .+ Σmat[comp, j] .* ((s.r.b[j] - μₑ[j]) * inv_diag)
             Σ̃j = Σmat[comp, comp] .- inv_diag .* (Σmat[comp, j] * Σmat[j, comp]')
             Σ̃j_sym = 0.5 .* (Σ̃j .+ Σ̃j')
-            update_distribution!(s.children_a[j], μᵃj, Σ̃j_sym)
-            update_distribution!(s.children_b[j], μᵇj, Σ̃j_sym)
+            _update_distribution!(s.children_a[j], μᵃj, Σ̃j_sym, epoch)
+            _update_distribution!(s.children_b[j], μᵇj, Σ̃j_sym, epoch)
         end
     end
 
