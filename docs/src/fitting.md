@@ -66,7 +66,7 @@ fit_mvnormal(μ̂, Σ̂, a, b; method = :auto)   # default — picks by dimensio
 | `method` | `:auto` | `:auto`, `:lbfgs`, or `:bcd` |
 | `n_threshold` | `8` | dimension cutoff used by `:auto` |
 | `gamma` | `0.2` | per-entry covariance weight in the loss (`γ = 1` weights mean and covariance equally) |
-| `ftarget` | `1e-3` | stop when loss drops below this |
+| `ftarget` | `1e-4` | stop when loss drops below this (RMS errors ≤ `√(2·ftarget)`, covariance `÷ √γ`) |
 | `seed` | `nothing` | seed the randomised base case for a reproducible fit |
 | `iterations` | `50` / `30` | outer-iteration cap (LBFGS / BCD) |
 | `time_limit` | `60.0` | seconds (LBFGS only) |

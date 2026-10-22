@@ -23,6 +23,11 @@ follows [Julia-style semantic versioning](https://pkgdocs.julialang.org/v1/compa
   `moment_loss`, `moment_loss_t`, the closed-form gradients, `fit_mvnormal`
   and `fit_mvt`. The BCD block score no longer divides by `k(k+3)/2`,
   since the block loss is already an average.
+- **Default `ftarget` is now `1e-4`** (was `1e-3`) for `fit_mvnormal`,
+  `fit_mvt` and `block_coord_descent`. The averaged loss is smaller than
+  the old one by a factor of about 2.5 at `n = 2` rising to about 14 at
+  `n = 8`, so `1e-4` keeps roughly the old strictness; it bounds the RMS
+  mean error by `0.014` and the RMS covariance error by `0.014/√γ`.
 
 ## [0.5.0] — 2026-10-15
 

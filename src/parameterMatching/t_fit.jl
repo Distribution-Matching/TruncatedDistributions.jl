@@ -263,7 +263,7 @@ covariance must exist).
 
 * `μ_init`, `Σ_init` — starting point; default is the coordinate warm start
   [`warm_start_diagonal_t`](@ref).
-* `ftarget`    — stop when the loss falls below this (default `1e-3`).
+* `ftarget`    — stop when the loss falls below this (default `1e-4`).
 * `gamma`      — covariance-term weight (default `0.2`).
 * `seed`       — seed the base-case RNG for a reproducible fit.
 * `time_limit` — seconds (default 60).
@@ -281,7 +281,7 @@ function fit_mvt(ν::Real, μ̂::AbstractVector, Σ̂::AbstractMatrix,
                  a::AbstractVector, b::AbstractVector;
                  μ_init::Union{Nothing,AbstractVector} = nothing,
                  Σ_init::Union{Nothing,AbstractMatrix} = nothing,
-                 ftarget::Float64 = 1e-3,
+                 ftarget::Float64 = 1e-4,
                  time_limit::Float64 = 60.0,
                  iterations::Int = 50,
                  verbose::Bool = false,

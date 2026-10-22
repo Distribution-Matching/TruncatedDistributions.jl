@@ -43,7 +43,7 @@ and the BCD accept/reject path built on them — repeat run to run.
 
 * `μ_init`, `Σ_init` — starting point for the optimiser. If omitted, the
                       coordinate warm-start is used.
-* `ftarget`         — stop when the loss falls below this (default 1e-3).
+* `ftarget`         — stop when the loss falls below this (default 1e-4).
 * `gamma`           — covariance-term weight (default 0.2); see Notes.
 * `seed`            — if given, seed the base-case RNG for a reproducible
                       fit (default `nothing`, i.e. non-deterministic QMC).
@@ -100,7 +100,7 @@ function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
                      n_threshold::Int = 8,
                      μ_init::Union{Nothing, AbstractVector} = nothing,
                      Σ_init::Union{Nothing, AbstractMatrix} = nothing,
-                     ftarget::Float64 = 1e-3,
+                     ftarget::Float64 = 1e-4,
                      time_limit::Float64 = 60.0,
                      iterations::Union{Nothing, Int} = nothing,
                      verbose::Bool = false,
