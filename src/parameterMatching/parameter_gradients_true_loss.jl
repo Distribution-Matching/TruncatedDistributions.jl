@@ -103,14 +103,15 @@ function grad_true_loss(d::RecursiveMomentsBoxTruncatedMvNormal,
     ∂ΣA_U = [(∂m2_U[i, j] ./ m0) .- (m2[i, j] / m0^2) .* ∂m0_U .-
               μA[j] .* ∂μA_U[i] .- μA[i] .* ∂μA_U[j] for i in 1:n, j in 1:n]
 
-    # finally chain into L = L1 + w2·L2, with the covariance weight
-    # w2 = γ·r(n) = γ·2/(n+1) from the loss definition (see `_cov_weight`).
+    # finally chain into L = w1·½‖μA − μ̂‖² + w2·½‖ΣA − Σ̂‖²_F, with the
+    # averaging weights w1 = 1/n, w2 = γ/n² (see `_mean_weight`, `_cov_weight`).
+    w1 = _mean_weight(n)
     w2 = _cov_weight(n)
     g_μ = zeros(n)
     g_U = zeros(n, n)
     for i in 1:n
-        g_μ .+= (μA[i] - μ̂[i]) .* ∂μA_μ[i]
-        g_U .+= (μA[i] - μ̂[i]) .* ∂μA_U[i]
+        g_μ .+= w1 .* (μA[i] - μ̂[i]) .* ∂μA_μ[i]
+        g_U .+= w1 .* (μA[i] - μ̂[i]) .* ∂μA_U[i]
     end
     for i in 1:n, j in 1:n
         g_μ .+= w2 .* (ΣA[i, j] - Σ̂[i, j]) .* ∂ΣA_μ[i, j]

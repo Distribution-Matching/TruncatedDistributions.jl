@@ -9,12 +9,14 @@ algorithm-specific traces.
 # Notes
 
 The fit runs in the original `(μ, Σ)` coordinates with no global
-standardisation; the loss is
-`L = ½‖μA − μ̂‖² + γ·r(n)·½‖ΣA − Σ̂‖²_F` with `r(n) = 2/(n+1)`, so the
-covariance weight `gamma` (default 0.2) trades off mean- against
-covariance-matching in a dimension-free way: `gamma = 1` balances the
-two blocks, `gamma < 1` favours the mean (0.2 ⇒ mean 5× the
-covariance), `gamma > 1` favours the covariance. The coordinate
+standardisation; the loss is the averaged Frobenius loss
+`L = ½·(1/n)‖μA − μ̂‖² + γ·½·(1/n²)‖ΣA − Σ̂‖²_F`, so the covariance
+weight `gamma` (default 0.2) is exactly the per-entry weight of the
+covariance relative to the mean, in every dimension: `gamma = 1` weights
+them equally, `gamma < 1` favours the mean (0.2 ⇒ mean 5× the
+covariance), `gamma > 1` favours the covariance. `L < ftarget` bounds
+the RMS mean error by `√(2 ftarget)` and the RMS covariance error by
+`√(2 ftarget / gamma)`. The coordinate
 warm-start does per-axis `(μ, log σ²)` rescaling, which is usually
 enough for targets at `O(1)` scale. For targets at very different
 scales, rescale the inputs yourself or watch issue #7.

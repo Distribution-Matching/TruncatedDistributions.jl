@@ -1,6 +1,6 @@
 name = "TruncatedDistributions"
 uuid = "77af390e-3af4-4cd8-bbfa-7ab7569c172d"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Yoni Nazarathy"]
 
 [deps]

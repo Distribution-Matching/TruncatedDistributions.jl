@@ -1,6 +1,7 @@
 # Helpers shared across the moment-matching pipeline:
 #
-#   * `moment_loss`      - the scalar loss L(μ, Σ) = ½‖μA − μ̂‖² + ½‖ΣA − Σ̂‖²_F,
+#   * `moment_loss`      - the scalar averaged loss
+#                          L(μ, Σ) = ½·(1/n)‖μA − μ̂‖² + γ·½·(1/n²)‖ΣA − Σ̂‖²_F,
 #                          read directly off the cached Kan–Robotti primitive
 #                          moments of `dist`.
 #   * `vector_moment_loss` - the same loss as a function of the packed (μ,U)
@@ -15,26 +16,28 @@
 # of U where U U^T = Σ^{-1}. Σ is therefore positive-definite by construction
 # for any choice of vec(U).
 
-# Covariance-term weight in the moment-matching loss. The loss is
+# Covariance-term weight in the moment-matching loss. The loss is the
+# averaged Frobenius loss
 #
-#   L = L1 + γ · r(n) · L2,   L1 = ½‖μA − μ̂‖²,  L2 = ½‖ΣA − Σ̂‖²_F,
+#   L = ½·(1/n)‖μA − μ̂‖² + γ·½·(1/n²)‖ΣA − Σ̂‖²_F,
 #
-# with r(n) = (#mean parameters)/(#covariance parameters)
-#           = n / (n(n+1)/2) = 2/(n+1).
-#
-# r(n) makes γ scale-free across dimensions: at γ = 1 the mean- and
-# covariance-residual blocks carry equal total weight, and the default
-# γ = 0.2 makes the mean five times more important than the covariance,
-# for every n. Set with `set_loss_gamma!`.
+# i.e. half the mean squared mean-residual entry plus γ times half the
+# mean squared covariance-residual entry (over all n² entries). γ is
+# therefore exactly the per-entry weight of the covariance relative to the
+# mean, for every n: the default γ = 0.2 makes the mean five times more
+# important than the covariance. L < tol bounds the RMS mean error by
+# √(2 tol) and the RMS covariance error by √(2 tol / γ), independently of
+# n. Set γ with `set_loss_gamma!`.
 const _LOSS_GAMMA = Ref{Float64}(0.2)
 
 """
     set_loss_gamma!(γ::Real)
 
-Set the covariance-term weight parameter γ of the moment-matching loss
-`L = L1 + γ·r(n)·L2` with `r(n) = 2/(n+1)`. γ = 1 balances the mean- and
-covariance-residual budgets; γ < 1 favours the mean (default γ = 0.2,
-i.e. the mean is 5× the covariance); γ > 1 favours the covariance.
+Set the covariance-term weight parameter γ of the averaged moment-matching
+loss `L = ½·(1/n)‖μA − μ̂‖² + γ·½·(1/n²)‖ΣA − Σ̂‖²_F`. γ is the per-entry
+weight of the covariance relative to the mean: γ = 1 weights them equally;
+γ < 1 favours the mean (default γ = 0.2, i.e. the mean is 5× the
+covariance); γ > 1 favours the covariance.
 Returns the previous value.
 """
 set_loss_gamma!(γ::Real) = (prev = _LOSS_GAMMA[]; _LOSS_GAMMA[] = Float64(γ); prev)
@@ -47,17 +50,19 @@ Return the current covariance-term weight parameter γ. See
 """
 get_loss_gamma() = _LOSS_GAMMA[]
 
-# Weight applied to the covariance residual L2 for a `dim`-dimensional
-# problem: γ · r(dim) = γ · 2/(dim+1). BCD sub-blocks of size k thus use
-# r(k) automatically, the full problem uses r(n).
-_cov_weight(dim::Int) = _LOSS_GAMMA[] * 2.0 / (dim + 1)
+# Weights applied to ½‖μA − μ̂‖² and ½‖ΣA − Σ̂‖²_F for a `dim`-dimensional
+# problem: 1/dim (average over the dim mean entries) and γ/dim² (average
+# over the dim² covariance entries). BCD sub-blocks of size k thus use the
+# k-dimensional averages automatically, the full problem uses n.
+_mean_weight(dim::Int) = 1.0 / dim
+_cov_weight(dim::Int)  = _LOSS_GAMMA[] / dim^2
 
 """
     moment_loss(d::RecursiveMomentsBoxTruncatedMvNormal, μ̂, Σ̂)
 
-Scalar moment-matching loss
-`L = ½‖μA − μ̂‖² + γ·r(n)·½‖ΣA − Σ̂‖²_F`, with `r(n) = 2/(n+1)` and the
-covariance weight γ from [`get_loss_gamma`](@ref) (default 0.2),
+Scalar averaged moment-matching loss
+`L = ½·(1/n)‖μA − μ̂‖² + γ·½·(1/n²)‖ΣA − Σ̂‖²_F`, with the covariance
+weight γ from [`get_loss_gamma`](@ref) (default 0.2),
 evaluated against the cached primitive moments of `d` (so much cheaper
 than going through `mean(d)` / `cov(d)`, which would re-integrate).
 Returns a large finite penalty if the cache indicates `m^{(0)} → 0`, so
@@ -81,8 +86,8 @@ function moment_loss(dist::RecursiveMomentsBoxTruncatedMvNormal,
     m2 = [raw_moment_from_indices(dist, [i, j]) for i in 1:n, j in 1:n]
     μA = m1 ./ m0
     ΣA = m2 ./ m0 .- μA * μA'
-    w2 = _cov_weight(n)
-    L = 0.5 * (sum(abs2, μA .- μ̂) + w2 * sum(abs2, ΣA .- Σ̂))
+    L = 0.5 * (_mean_weight(n) * sum(abs2, μA .- μ̂) +
+               _cov_weight(n)  * sum(abs2, ΣA .- Σ̂))
     return isfinite(L) ? L : prevfloat(Inf) / 4
 end
 

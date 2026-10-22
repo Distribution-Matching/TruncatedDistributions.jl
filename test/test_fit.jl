@@ -53,14 +53,15 @@ end
     μ̂, Σ̂ = _targets_from(μ, Σ, a, b)
 
     μ_fit, Σ_fit, info = fit_mvnormal(μ̂, Σ̂, a, b; method = :lbfgs,
-                                      ftarget = 1e-8, iterations = 100,
+                                      ftarget = 1e-10, iterations = 100,
                                       verbose = false)
 
     @test info.method === :lbfgs
-    @test info.loss < 1e-6
+    @test info.loss < 1e-8
     d_fit = TruncatedMvNormal(μ_fit, Matrix(Σ_fit), a, b)
-    # LBFGS converges to ~sqrt(ftarget) ≈ 1e-4 per moment entry; allow a
-    # little slack for the QMC-based KR base case used at ≥ 2D.
+    # L < ftarget bounds the RMS covariance error by √(2·ftarget/γ) ≈ 3e-5
+    # at the default γ = 0.2; allow slack for the QMC-based KR base case
+    # used at ≥ 2D.
     @test isapprox(mean(d_fit), μ̂; atol = 5e-4)
     @test isapprox(Matrix(cov(d_fit)), Σ̂; atol = 5e-4)
 end
@@ -112,7 +113,7 @@ end
                                             method = :badmethod)
 end
 
-@testset "loss gamma — weighting and r(n)" begin
+@testset "loss gamma — averaged Frobenius weighting" begin
     set_kr_base_backend!(:mvnormalcdf)
     μ = [0.3, -0.2]; Σ = [1.0 0.4; 0.4 1.0]
     a = [-1.0, -1.5]; b = [1.5, 1.0]
@@ -128,6 +129,10 @@ end
         # L(γ) is affine in γ: L(γ) = L0 + γ·(L1 − L0). Check the 0.2 point.
         @test isapprox(L2, L0 + 0.2 * (L1 - L0); rtol = 1e-10)
         @test L0 < L2 < L1        # more covariance weight ⇒ larger loss here
+        # Exact averaged form: ½·mean((μA−μ̂)²) + γ·½·mean((ΣA−Σ̂)²).
+        μA = mean(d); ΣA = Matrix(cov(d))
+        @test isapprox(L1, 0.5 * sum(abs2, μA .- μ̂p) / 2 +
+                           0.5 * sum(abs2, ΣA .- Σ̂p) / 4; rtol = 1e-3)
     finally
         set_loss_gamma!(prev)
     end

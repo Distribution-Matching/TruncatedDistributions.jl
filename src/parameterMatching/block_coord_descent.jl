@@ -235,13 +235,11 @@ function _sample_categorical(rng::AbstractRNG, p::AbstractVector{Float64})
 end
 
 # Per-target marginal residual: marginal moment loss of the k-D truncated
-# normal with the current iterate's (μ_S, Σ_SS), divided by k(k+3)/2 so
-# that scores across different block sizes are comparable.
-function _block_marginal_score(μ, Σ, S::Vector{Int}, a, b, μ̂, Σ̂)
-    L = _marginal_loss_k(μ, Σ, S, a, b, μ̂, Σ̂)
-    k = length(S)
-    return L / (k * (k + 3) / 2)
-end
+# normal with the current iterate's (μ_S, Σ_SS). The loss is already an
+# average over the block's mean and covariance entries, so scores across
+# different block sizes are comparable as they stand.
+_block_marginal_score(μ, Σ, S::Vector{Int}, a, b, μ̂, Σ̂) =
+    _marginal_loss_k(μ, Σ, S, a, b, μ̂, Σ̂)
 
 function _marginal_loss_k(μ, Σ, S::Vector{Int}, a, b, μ̂, Σ̂)
     μ_S  = μ[S]
@@ -391,13 +389,13 @@ function _try_1d_loss(μ::Real, σ²::Real, a::Real, b::Real,
                        μ̂::Real, Σ̂ii::Real)
     # Returns the *same scale* of moment loss as `_marginal_loss_k` /
     # `moment_loss` for a k = 1 block, so the BCD acceptance test compares
-    # like with like: L = ½(μA − μ̂)² + γ·r(1)·½(ΣA − Σ̂)² with
-    # r(1) = 2/2 = 1, i.e. the covariance weight `_cov_weight(1) = γ`.
+    # like with like: at k = 1 the averaging weights are
+    # `_mean_weight(1) = 1` and `_cov_weight(1) = γ`.
     d  = truncated(Normal(μ, sqrt(max(σ², eps()))), a, b)
     m  = moments(d, 2)
     μA = m[1]
     ΣA = m[2] - μA^2
-    return 0.5 * ((μA - μ̂)^2 + _cov_weight(1) * (ΣA - Σ̂ii)^2)
+    return 0.5 * (_mean_weight(1) * (μA - μ̂)^2 + _cov_weight(1) * (ΣA - Σ̂ii)^2)
 end
 
 # `vector_fg_true_loss` plus a proximal `λ ‖p - p_anchor‖²` term.

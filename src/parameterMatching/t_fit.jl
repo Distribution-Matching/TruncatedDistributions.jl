@@ -92,7 +92,8 @@ end
 """
     moment_loss_t(P::TMomentPair, μ̂, Σ̂)
 
-The moment-matching loss `L = ½‖μA − μ̂‖² + γ·r(n)·½‖ΣA − Σ̂‖²_F` for the
+The averaged moment-matching loss
+`L = ½·(1/n)‖μA − μ̂‖² + γ·½·(1/n²)‖ΣA − Σ̂‖²_F` for the
 truncated `t_ν` law held in `P`.
 """
 function moment_loss_t(P::TMomentPair, μ̂::AbstractVector, Σ̂::AbstractMatrix)
@@ -104,7 +105,8 @@ function moment_loss_t(P::TMomentPair, μ̂::AbstractVector, Σ̂::AbstractMatri
     m2 = [_mt(s, [i, j]) for i in 1:n, j in 1:n]
     μA = m1 ./ m0
     ΣA = m2 ./ m0 .- μA * μA'
-    L = 0.5 * (sum(abs2, μA .- μ̂) + _cov_weight(n) * sum(abs2, ΣA .- Σ̂))
+    L = 0.5 * (_mean_weight(n) * sum(abs2, μA .- μ̂) +
+               _cov_weight(n)  * sum(abs2, ΣA .- Σ̂))
     return isfinite(L) ? L : prevfloat(Inf) / 4
 end
 
@@ -139,12 +141,13 @@ function grad_true_loss_t(P::TMomentPair, U::AbstractMatrix,
     ∂μA_μ = [(∂m1[i][1] .- μA[i] .* ∂m0_μ) ./ m0 for i in 1:n]
     ∂μA_U = [(∂m1[i][2] .- μA[i] .* ∂m0_U) ./ m0 for i in 1:n]
 
+    w1 = _mean_weight(n)
     w2 = _cov_weight(n)
     g_μ = zeros(n)
     g_U = zeros(n, n)
     for i in 1:n
-        g_μ .+= (μA[i] - μ̂[i]) .* ∂μA_μ[i]
-        g_U .+= (μA[i] - μ̂[i]) .* ∂μA_U[i]
+        g_μ .+= w1 .* (μA[i] - μ̂[i]) .* ∂μA_μ[i]
+        g_U .+= w1 .* (μA[i] - μ̂[i]) .* ∂μA_U[i]
     end
     for i in 1:n, j in 1:n
         r = w2 * (ΣA[i, j] - Σ̂[i, j])

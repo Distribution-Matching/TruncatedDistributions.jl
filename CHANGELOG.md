@@ -5,6 +5,25 @@ All notable changes to this project are documented here. The format is based on
 follows [Julia-style semantic versioning](https://pkgdocs.julialang.org/v1/compatibility/)
 (for `0.x` releases, a bump of the minor version may include breaking changes).
 
+## [0.6.0] — 2026-10-22
+
+### Changed
+
+- **Averaged Frobenius moment-matching loss (breaking).** The loss is now
+  `L = ½·(1/n)‖μA − μ̂‖² + γ·½·(1/n²)‖ΣA − Σ̂‖²_F`, the mean squared
+  mean-residual entry plus `γ` times the mean squared covariance-residual
+  entry (halved), replacing `L = L1 + γ·r(n)·L2` with `r(n) = 2/(n+1)`.
+  `r(n)` counted the `n(n+1)/2` distinct covariance entries while the
+  Frobenius norm sums all `n²`, so the mean/covariance balance still
+  drifted with `n`; now `γ` is exactly the per-entry covariance weight in
+  every dimension, and `L < ftarget` bounds the RMS mean error by
+  `√(2 ftarget)` and the RMS covariance error by `√(2 ftarget / γ)`. The
+  minimisers (zero set) are unchanged, but loss values, `info.loss`,
+  `ftarget` semantics and optimiser paths differ from 0.5.0. Applies to
+  `moment_loss`, `moment_loss_t`, the closed-form gradients, `fit_mvnormal`
+  and `fit_mvt`. The BCD block score no longer divides by `k(k+3)/2`,
+  since the block loss is already an average.
+
 ## [0.5.0] — 2026-10-15
 
 ### Added

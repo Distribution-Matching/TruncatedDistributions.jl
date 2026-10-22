@@ -14,18 +14,20 @@ b = [ 1.5,  1.0]
 
 μ_fit, Σ_fit, info = fit_mvnormal(μ̂, Σ̂, a, b)
 @show info.method   # :lbfgs at this size; :bcd for n ≥ 9
-@show info.loss     # ½‖μA − μ̂‖² + γ·r(n)·½‖ΣA − Σ̂‖²_F
+@show info.loss     # ½(1/n)‖μA − μ̂‖² + γ·½(1/n²)‖ΣA − Σ̂‖²_F
 @show info.time
 ```
 
-The loss is ``L = L_1 + \gamma\, r(n)\, L_2`` with
-``L_1 = \tfrac12\|\mu_A - \hat\mu\|^2``,
-``L_2 = \tfrac12\|\Sigma_A - \hat\Sigma\|_F^2``, and
-``r(n) = 2/(n+1)`` (the ratio of mean to covariance parameter counts).
-The single weight ``\gamma`` (keyword `gamma`, default ``0.2``) is
-scale-free across dimensions: ``\gamma = 1`` balances the two residual
-blocks for every ``n``, and the default ``\gamma = 0.2`` weights the mean
-five times as heavily as the covariance. See
+The loss is the averaged Frobenius loss
+``L = \tfrac12 \cdot \tfrac1n \|\mu_A - \hat\mu\|^2 + \gamma \cdot \tfrac12 \cdot \tfrac1{n^2} \|\Sigma_A - \hat\Sigma\|_F^2``:
+half the mean squared mean-residual entry plus ``\gamma`` times half the
+mean squared covariance-residual entry. The weight ``\gamma`` (keyword
+`gamma`, default ``0.2``) is exactly the per-entry weight of the
+covariance relative to the mean, in every dimension: ``\gamma = 1``
+weights them equally, and the default ``\gamma = 0.2`` weights the mean
+five times as heavily. ``L <`` `ftarget` bounds the RMS mean error by
+``\sqrt{2\,\mathrm{ftarget}}`` and the RMS covariance error by
+``\sqrt{2\,\mathrm{ftarget}/\gamma}``. See
 [`set_loss_gamma!`](@ref).
 
 For a reproducible fit under the randomised (`:mvnormalcdf`) base case,
@@ -63,7 +65,7 @@ fit_mvnormal(μ̂, Σ̂, a, b; method = :auto)   # default — picks by dimensio
 | --- | --- | --- |
 | `method` | `:auto` | `:auto`, `:lbfgs`, or `:bcd` |
 | `n_threshold` | `8` | dimension cutoff used by `:auto` |
-| `gamma` | `0.2` | covariance weight in the loss (`γ = 1` balances mean and covariance) |
+| `gamma` | `0.2` | per-entry covariance weight in the loss (`γ = 1` weights mean and covariance equally) |
 | `ftarget` | `1e-3` | stop when loss drops below this |
 | `seed` | `nothing` | seed the randomised base case for a reproducible fit |
 | `iterations` | `50` / `30` | outer-iteration cap (LBFGS / BCD) |
