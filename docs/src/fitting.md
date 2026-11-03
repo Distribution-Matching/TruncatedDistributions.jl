@@ -22,10 +22,10 @@ The loss is the averaged Frobenius loss
 ``L = \tfrac12 \cdot \tfrac1n \|\mu_A - \hat\mu\|^2 + \gamma \cdot \tfrac12 \cdot \tfrac1{n^2} \|\Sigma_A - \hat\Sigma\|_F^2``:
 half the mean squared mean-residual entry plus ``\gamma`` times half the
 mean squared covariance-residual entry. The weight ``\gamma`` (keyword
-`gamma`, default ``0.2``) is exactly the per-entry weight of the
-covariance relative to the mean, in every dimension: ``\gamma = 1``
-weights them equally, and the default ``\gamma = 0.2`` weights the mean
-five times as heavily. ``L <`` `ftarget` bounds the RMS mean error by
+`gamma`, default ``1``) is exactly the per-entry weight of the
+covariance relative to the mean, in every dimension: the default
+``\gamma = 1`` weights them equally, and ``\gamma = 0.2`` would weight
+the mean five times as heavily. ``L <`` `ftarget` bounds the RMS mean error by
 ``\sqrt{2\,\mathrm{ftarget}}`` and the RMS covariance error by
 ``\sqrt{2\,\mathrm{ftarget}/\gamma}``. See
 [`set_loss_gamma!`](@ref).
@@ -65,7 +65,7 @@ fit_mvnormal(μ̂, Σ̂, a, b; method = :auto)   # default — picks by dimensio
 | --- | --- | --- |
 | `method` | `:auto` | `:auto`, `:lbfgs`, or `:bcd` |
 | `n_threshold` | `8` | dimension cutoff used by `:auto` |
-| `gamma` | `0.2` | per-entry covariance weight in the loss (`γ = 1` weights mean and covariance equally) |
+| `gamma` | `1` | per-entry covariance weight in the loss (`γ = 1` weights mean and covariance equally) |
 | `ftarget` | `1e-4` | stop when loss drops below this (RMS errors ≤ `√(2·ftarget)`, covariance `÷ √γ`) |
 | `seed` | `nothing` | seed the randomised base case for a reproducible fit |
 | `iterations` | `50` / `30` | outer-iteration cap (LBFGS / BCD) |

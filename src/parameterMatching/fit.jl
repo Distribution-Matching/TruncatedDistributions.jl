@@ -11,7 +11,7 @@ algorithm-specific traces.
 The fit runs in the original `(μ, Σ)` coordinates with no global
 standardisation; the loss is the averaged Frobenius loss
 `L = ½·(1/n)‖μA − μ̂‖² + γ·½·(1/n²)‖ΣA − Σ̂‖²_F`, so the covariance
-weight `gamma` (default 0.2) is exactly the per-entry weight of the
+weight `gamma` (default 1) is exactly the per-entry weight of the
 covariance relative to the mean, in every dimension: `gamma = 1` weights
 them equally, `gamma < 1` favours the mean (0.2 ⇒ mean 5× the
 covariance), `gamma > 1` favours the covariance. `L < ftarget` bounds
@@ -32,7 +32,7 @@ and the BCD accept/reject path built on them — repeat run to run.
             larger problems. The default `n_threshold = 8` reflects the
             crossover where a single full-dimension Kan–Robotti gradient
             call starts to cost minutes.
-* `:lbfgs` — joint LBFGS over the packed `(μ, U)` parameter vector (with
+* `:lbfgs` — joint LBFGS over the packed `(μ, V)` parameter vector (with
             `U U^T = Σ^{-1}`), warm-started by a coordinate-wise diagonal
             fit. Recommended for n ≤ 8.
 * `:bcd`   — hybrid block coordinate descent over blocks of size 1, 2, 3.
@@ -44,7 +44,7 @@ and the BCD accept/reject path built on them — repeat run to run.
 * `μ_init`, `Σ_init` — starting point for the optimiser. If omitted, the
                       coordinate warm-start is used.
 * `ftarget`         — stop when the loss falls below this (default 1e-4).
-* `gamma`           — covariance-term weight (default 0.2); see Notes.
+* `gamma`           — covariance-term weight (default 1); see Notes.
 * `seed`            — if given, seed the base-case RNG for a reproducible
                       fit (default `nothing`, i.e. non-deterministic QMC).
 * `time_limit`      — seconds (`:lbfgs` only; the BCD path is paced
@@ -111,7 +111,7 @@ function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
                      bcd_softmax_T::Float64 = 1.0,
                      bcd_polish::Bool = false,
                      bcd_polish_iterations::Int = 10,
-                     gamma::Real = 0.2,
+                     gamma::Real = 1.0,
                      seed::Union{Nothing, Integer} = nothing)
     n = length(μ̂)
     size(Σ̂) == (n, n) ||
@@ -176,7 +176,7 @@ function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
     end
 end
 
-# Joint LBFGS on the packed (μ, U) parameter vector with the explicit
+# Joint LBFGS on the packed (μ, V) parameter vector (V: U with the log of its diagonal) with the explicit
 # true-loss gradient. Equivalent to the "EXP-KR-MVN+WS" path in the paper.
 function _fit_mvnormal_lbfgs(μ̂::Vector{Float64}, Σ̂::Matrix{Float64},
                              a::Vector{Float64}, b::Vector{Float64},

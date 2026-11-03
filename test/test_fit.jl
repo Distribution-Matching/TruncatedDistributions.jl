@@ -59,8 +59,8 @@ end
     @test info.method === :lbfgs
     @test info.loss < 1e-8
     d_fit = TruncatedMvNormal(μ_fit, Matrix(Σ_fit), a, b)
-    # L < ftarget bounds the RMS covariance error by √(2·ftarget/γ) ≈ 3e-5
-    # at the default γ = 0.2; allow slack for the QMC-based KR base case
+    # L < ftarget bounds the RMS covariance error by √(2·ftarget/γ) ≈ 1.4e-5
+    # at the default γ = 1; allow slack for the QMC-based KR base case
     # used at ≥ 2D.
     @test isapprox(mean(d_fit), μ̂; atol = 5e-4)
     @test isapprox(Matrix(cov(d_fit)), Σ̂; atol = 5e-4)
@@ -177,4 +177,23 @@ end
 
     prev_mc = set_moment_mc!(above = 9, samples = 12_345)
     @test set_moment_mc!(above = prev_mc[1], samples = prev_mc[2]) == (9, 12_345)
+end
+
+@testset "log-Cholesky parameter vector" begin
+    μ = [0.2, -0.1, 0.3]; Σ = [1.0 0.3 0.1; 0.3 1.2 0.2; 0.1 0.2 0.9]
+    p = make_param_vec_from_μ_Σ(μ, Σ)
+    μ2, Σ2 = make_μ_Σ_from_param_vec(p)
+    @test μ2 ≈ μ
+    @test Σ2 ≈ Σ
+    # Diagonal entries of V are the logs of those of U, and any real vector is valid.
+    U = cholesky(Symmetric(inv(Σ))).U
+    @test p[[4, 7, 9]] ≈ log.(diag(U))
+    q = copy(p); q[[4, 7, 9]] .= -1.0
+    @test isposdef(Symmetric(make_μ_Σ_from_param_vec(q)[2]))
+    # An overshooting line search gets a finite penalty, not an exception.
+    a = [-1.0, -1.0, -1.0]; b = [1.0, 1.0, 1.0]
+    q[4] = -1000.0
+    G = similar(q)
+    @test isfinite(vector_fg_true_loss(1.0, G, q, a, b, μ, Σ))
+    @test all(iszero, G)
 end

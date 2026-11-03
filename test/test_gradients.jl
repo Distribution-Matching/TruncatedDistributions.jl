@@ -1,6 +1,6 @@
 # Correctness of the analytic true-loss gradient
 #
-#   ∇_{(μ,U)} L(μ,U; μ̂, Σ̂)  vs  central finite differences of
+#   ∇_{(μ,V)} L(μ,V; μ̂, Σ̂)  vs  central finite differences of
 #                                `vector_moment_loss`.
 #
 # Three small but qualitatively distinct cases. The check is also run with
@@ -74,7 +74,7 @@ const GRAD_CASES = [
 end
 
 @testset "True-loss gradient vanishes at the true moments" begin
-    # When μ̂, Σ̂ are exactly the truncated moments of d, L(μ,U) = 0 and
+    # When μ̂, Σ̂ are exactly the truncated moments of d, L(μ,V) = 0 and
     # ∇L should be 0 to numerical precision.
     ne = get_example(n = 2, index = 4)
     p  = _grad_test_setup(collect(ne.μ), Matrix(ne.Σ))
@@ -85,11 +85,11 @@ end
 
 @testset "True-loss gradient tracks γ (analytic vs FD at γ ≠ default)" begin
     # The covariance-block weight must appear in the gradient, not just the
-    # loss: cross-check analytic vs FD at γ = 1 (≠ the default 0.2).
+    # loss: cross-check analytic vs FD at γ = 0.2 (≠ the default 1).
     c = GRAD_CASES[1]
     prev = get_loss_gamma()
     try
-        set_loss_gamma!(1.0)
+        set_loss_gamma!(0.2)
         p = _grad_test_setup(c.μ, c.Σ)
         f(q) = vector_moment_loss(q, c.a, c.b, collect(c.μ̂), Matrix(c.Σ̂))
         g_an = vector_grad_true_loss(p, c.a, c.b, collect(c.μ̂), Matrix(c.Σ̂))

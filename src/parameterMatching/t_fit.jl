@@ -1,15 +1,18 @@
 # Moment matching for the box-truncated multivariate Student-t with fixed
 # degrees of freedom ν.
 #
-# Same loss and (μ, U) chart as the Gaussian, Σ⁻¹ = UᵀU. The t score is
+# Same loss and (μ, V) chart as the Gaussian, Σ⁻¹ = UᵀU with V_kk = log U_kk
+# and V_kl = U_kl for k < l. The t score is
 # the Gaussian one with the quadratic-form terms weighted by
 # w(Q) = (n+ν)/(ν+Q), and w·f_ν(·; μ, Σ) = f_{ν+2}(·; μ, Σ♯) with
 # Σ♯ = ν Σ / (ν+2) (the degrees-of-freedom shift). So
 #
 #   ∂m_α/∂μ_k   = Σ_j [UᵀU]_{kj} (m♯_{α,j} − μ_j m♯_α),
-#   ∂m_α/∂U_kl  = δ_kl/U_kk · m_α − Σ_{s≥k} U_ks J♯(α, s, l),
+#   ∂m_α/∂V_kl  = δ_kl m_α − ρ_kl Σ_{s≥k} U_ks J♯(α, s, l),
 #
-# with m♯ the raw moments of the truncated t_{ν+2}(μ, Σ♯) and J♯ the
+# with ρ_kk = U_kk and ρ_kl = 1 for k < l,
+#
+# and with m♯ the raw moments of the truncated t_{ν+2}(μ, Σ♯) and J♯ the
 # corresponding centred second-order combination. Everything downstream
 # (quotient and chain rule into L) is identical to `grad_true_loss`.
 #
@@ -65,7 +68,7 @@ function _mt(s::BoxTruncatedMvTRecursiveMomentsState, inds)
     return raw_moment(s, κ)
 end
 
-# ∂m_α/∂μ (length n) and ∂m_α/∂U (upper triangular n×n) for the base law,
+# ∂m_α/∂μ (length n) and ∂m_α/∂V (upper triangular n×n) for the base law,
 # using the shifted law for the score-generated terms.
 function _t_moment_grad(P::TMomentPair, U, UᵀU, inds::Vector{Int})
     n = P.base.n
@@ -78,15 +81,16 @@ function _t_moment_grad(P::TMomentPair, U, UᵀU, inds::Vector{Int})
     J = [_mt(s♯, vcat(inds, [s, l])) - μ[s] * m♯1[l] - μ[l] * m♯1[s] + μ[s] * μ[l] * m♯
          for s in 1:n, l in 1:n]
     mp = _mt(P.base, inds)
-    g_U = zeros(n, n)
+    g_V = zeros(n, n)
     for k in 1:n, l in k:n
-        acc = k == l ? mp / U[k, k] : 0.0
+        ρ = k == l ? U[k, k] : 1.0
+        acc = k == l ? mp : 0.0
         for s in k:n
-            acc -= U[k, s] * J[s, l]
+            acc -= ρ * U[k, s] * J[s, l]
         end
-        g_U[k, l] = acc
+        g_V[k, l] = acc
     end
-    return g_μ, g_U
+    return g_μ, g_V
 end
 
 """
@@ -100,21 +104,22 @@ function moment_loss_t(P::TMomentPair, μ̂::AbstractVector, Σ̂::AbstractMatri
     s = P.base
     n = s.n
     m0 = _mt(s, Int[])
-    (!isfinite(m0) || m0 < eps(Float64)) && return prevfloat(Inf) / 4
+    (!isfinite(m0) || m0 < eps(Float64)) && return _LOSS_PENALTY
     m1 = [_mt(s, [i]) for i in 1:n]
     m2 = [_mt(s, [i, j]) for i in 1:n, j in 1:n]
     μA = m1 ./ m0
     ΣA = m2 ./ m0 .- μA * μA'
     L = 0.5 * (_mean_weight(n) * sum(abs2, μA .- μ̂) +
                _cov_weight(n)  * sum(abs2, ΣA .- Σ̂))
-    return isfinite(L) ? L : prevfloat(Inf) / 4
+    return isfinite(L) ? L : _LOSS_PENALTY
 end
 
 """
-    grad_true_loss_t(P::TMomentPair, U, μ̂, Σ̂) -> (g_μ, g_U)
+    grad_true_loss_t(P::TMomentPair, U, μ̂, Σ̂) -> (g_μ, g_V)
 
 Gradient of the truncated-t moment-matching loss with respect to `μ` and
-the upper-triangular `U` (`UᵀU = Σ⁻¹`), assembled in closed form from the
+the upper-triangular `V` (`UᵀU = Σ⁻¹`, `V_kk = log U_kk`, `V_kl = U_kl` for
+`k < l`), assembled in closed form from the
 truncated `t_ν` moments of order ≤ 2 and the truncated `t_{ν+2}` moments
 of order ≤ 4 held in `P` (see [`t_moment_matching_pair`](@ref)).
 """
@@ -130,7 +135,7 @@ function grad_true_loss_t(P::TMomentPair, U::AbstractMatrix,
     μA = m1 ./ m0
     ΣA = m2 ./ m0 .- μA * μA'
 
-    ∂m0_μ, ∂m0_U = _t_moment_grad(P, U, UᵀU, Int[])
+    ∂m0_μ, ∂m0_V = _t_moment_grad(P, U, UᵀU, Int[])
     ∂m1 = [_t_moment_grad(P, U, UᵀU, [i]) for i in 1:n]
     ∂m2 = Matrix{Tuple{Vector{Float64},Matrix{Float64}}}(undef, n, n)
     for i in 1:n, j in i:n
@@ -139,34 +144,33 @@ function grad_true_loss_t(P::TMomentPair, U::AbstractMatrix,
     end
 
     ∂μA_μ = [(∂m1[i][1] .- μA[i] .* ∂m0_μ) ./ m0 for i in 1:n]
-    ∂μA_U = [(∂m1[i][2] .- μA[i] .* ∂m0_U) ./ m0 for i in 1:n]
+    ∂μA_V = [(∂m1[i][2] .- μA[i] .* ∂m0_V) ./ m0 for i in 1:n]
 
     w1 = _mean_weight(n)
     w2 = _cov_weight(n)
     g_μ = zeros(n)
-    g_U = zeros(n, n)
+    g_V = zeros(n, n)
     for i in 1:n
         g_μ .+= w1 .* (μA[i] - μ̂[i]) .* ∂μA_μ[i]
-        g_U .+= w1 .* (μA[i] - μ̂[i]) .* ∂μA_U[i]
+        g_V .+= w1 .* (μA[i] - μ̂[i]) .* ∂μA_V[i]
     end
     for i in 1:n, j in 1:n
         r = w2 * (ΣA[i, j] - Σ̂[i, j])
         iszero(r) && continue
         ∂ΣA_μ = (∂m2[i, j][1] ./ m0) .- (m2[i, j] / m0^2) .* ∂m0_μ .-
                 μA[j] .* ∂μA_μ[i] .- μA[i] .* ∂μA_μ[j]
-        ∂ΣA_U = (∂m2[i, j][2] ./ m0) .- (m2[i, j] / m0^2) .* ∂m0_U .-
-                μA[j] .* ∂μA_U[i] .- μA[i] .* ∂μA_U[j]
+        ∂ΣA_V = (∂m2[i, j][2] ./ m0) .- (m2[i, j] / m0^2) .* ∂m0_V .-
+                μA[j] .* ∂μA_V[i] .- μA[i] .* ∂μA_V[j]
         g_μ .+= r .* ∂ΣA_μ
-        g_U .+= r .* ∂ΣA_U
+        g_V .+= r .* ∂ΣA_V
     end
-    return g_μ, g_U
+    return g_μ, g_V
 end
 
 function _unpack_μ_U_Σ(p::Vector{Float64})
     n = n_from_param_size(length(p))
     μ = p[1:n]
-    U = zeros(n, n)
-    U[[CartesianIndex(i, j) for i = 1:n for j = i:n]] = p[(n+1):end]
+    U = _U_from_param_vec(p)
     Ui = inv(UpperTriangular(U))
     Σ = Matrix(Ui * Ui')
     Σ = 0.5 .* (Σ .+ Σ')
@@ -177,10 +181,11 @@ end
 """
     vector_moment_loss_t(p, ν, a, b, μ̂, Σ̂)
 
-The truncated-t moment-matching loss at the packed `(μ, U)` vector `p`
+The truncated-t moment-matching loss at the packed `(μ, V)` vector `p`
 (layout of `make_param_vec_from_μ_U`).
 """
 function vector_moment_loss_t(p::Vector{Float64}, ν, a, b, μ̂, Σ̂)
+    _param_vec_admissible(p) || return _LOSS_PENALTY
     μ, _, Σ = _unpack_μ_U_Σ(p)
     s = BoxTruncatedMvTRecursiveMomentsState(ν, μ, Σ,
             BoxTruncationRegion(Vector{Float64}(a), Vector{Float64}(b)), 2)
@@ -192,15 +197,19 @@ end
     vector_fg_true_loss_t(F, G, p, ν, a, b, μ̂, Σ̂)
 
 Optim `only_fg!` entry point for the truncated-t moment-matching loss and
-its closed-form gradient on the packed `(μ, U)` vector. One shared
+its closed-form gradient on the packed `(μ, V)` vector. One shared
 recursion serves the loss and the gradient.
 """
 function vector_fg_true_loss_t(F, G, p::Vector{Float64}, ν, a, b, μ̂, Σ̂)
+    if !_param_vec_admissible(p)
+        G !== nothing && fill!(G, 0.0)
+        return F !== nothing ? _LOSS_PENALTY : nothing
+    end
     μ, U, Σ = _unpack_μ_U_Σ(p)
     P = t_moment_matching_pair(ν, μ, Σ, a, b)
     if G !== nothing
-        g_μ, g_U = grad_true_loss_t(P, U, μ̂, Σ̂)
-        G .= make_param_vec_from_μ_U(g_μ, g_U)
+        g_μ, g_V = grad_true_loss_t(P, U, μ̂, Σ̂)
+        G .= _pack_μ_V(g_μ, g_V)
     end
     F !== nothing && return moment_loss_t(P, μ̂, Σ̂)
     return nothing
@@ -249,7 +258,8 @@ Find a location `μ` and scale matrix `Σ` such that the multivariate
 Student-t `t_ν(μ, Σ)` (fixed degrees of freedom `ν`) truncated to the box
 `[a, b]` has mean `μ̂` and covariance `Σ̂`. Returns `(μ, Σ, info)`.
 
-The solver is joint LBFGS over the packed `(μ, U)` vector (`UᵀU = Σ⁻¹`)
+The solver is joint LBFGS over the packed `(μ, V)` vector (`UᵀU = Σ⁻¹`,
+`V` is `U` with the log of its diagonal)
 with the closed-form gradient of the paper: the truncated `t_ν` moments of
 order ≤ 2 and the truncated `t_{ν+2}(μ, νΣ/(ν+2))` moments of order ≤ 4,
 both from one Kan–Robotti-type recursion tree. The loss and the meaning of
@@ -264,7 +274,7 @@ covariance must exist).
 * `μ_init`, `Σ_init` — starting point; default is the coordinate warm start
   [`warm_start_diagonal_t`](@ref).
 * `ftarget`    — stop when the loss falls below this (default `1e-4`).
-* `gamma`      — covariance-term weight (default `0.2`).
+* `gamma`      — covariance-term weight (default `1`).
 * `seed`       — seed the base-case RNG for a reproducible fit.
 * `time_limit` — seconds (default 60).
 * `iterations` — LBFGS iteration cap (default 50).
@@ -285,7 +295,7 @@ function fit_mvt(ν::Real, μ̂::AbstractVector, Σ̂::AbstractMatrix,
                  time_limit::Float64 = 60.0,
                  iterations::Int = 50,
                  verbose::Bool = false,
-                 gamma::Real = 0.2,
+                 gamma::Real = 1.0,
                  seed::Union{Nothing,Integer} = nothing)
     n = length(μ̂)
     size(Σ̂) == (n, n) ||

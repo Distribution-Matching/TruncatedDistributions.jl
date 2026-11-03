@@ -49,7 +49,7 @@ a dynamic, ODE-based moment matcher — addressing problems that
 - Optional moment-matching layer: `fit_mvnormal(μ̂, Σ̂, a, b)` recovers
   `(μ, Σ)` whose box-truncation has the requested moments, under a
   single per-entry covariance weight `γ` in an averaged loss (`gamma`,
-  default `0.2`, so the mean is weighted five times the covariance). Picks joint LBFGS +
+  default `1`, so the mean and covariance entries are weighted equally). Picks joint LBFGS +
   warm-start for small problems and a hybrid block-coordinate solver for
   larger ones.
 - Box-truncated multivariate Student-t, `TruncatedMvT(ν, μ, Σ, a, b)`,
@@ -210,10 +210,10 @@ b = [ 1.5,  1.0]
 The loss is the averaged Frobenius loss
 `L = ½·(1/n)‖μA − μ̂‖² + γ·½·(1/n²)‖ΣA − Σ̂‖²_F`: half the mean squared
 mean-residual entry plus `γ` times half the mean squared
-covariance-residual entry. The weight `γ` (keyword `gamma`, default `0.2`)
+covariance-residual entry. The weight `γ` (keyword `gamma`, default `1`)
 is therefore exactly the per-entry weight of the covariance relative to
-the mean, in every dimension: `γ = 1` weights them equally, and the
-default `γ = 0.2` weights the mean five times as heavily. `L < ftarget`
+the mean, in every dimension: the default `γ = 1` weights them equally,
+and `γ = 0.2` would weight the mean five times as heavily. `L < ftarget`
 bounds the RMS mean error by `√(2·ftarget)` and the RMS covariance error
 by `√(2·ftarget/γ)`.
 
@@ -231,7 +231,7 @@ Useful keyword arguments:
 | --- | --- | --- |
 | `method` | `:auto` | `:auto`, `:lbfgs`, or `:bcd` |
 | `n_threshold` | `8` | dimension cutoff used by `:auto` |
-| `gamma` | `0.2` | per-entry covariance weight in the loss (`γ = 1` weights mean and covariance equally) |
+| `gamma` | `1` | per-entry covariance weight in the loss (`γ = 1` weights mean and covariance equally) |
 | `ftarget` | `1e-4` | stop when loss drops below this (RMS errors ≤ `√(2·ftarget)`, covariance `÷ √γ`) |
 | `seed` | `nothing` | seed the randomised base case for a reproducible fit |
 | `iterations` | `50` / `30` | outer-iteration cap (LBFGS / BCD) |

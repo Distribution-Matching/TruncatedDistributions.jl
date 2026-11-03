@@ -99,7 +99,7 @@ export
     grad_true_loss_t,
     vector_fg_true_loss_t,
     moment_grad_μ,
-    moment_grad_U,
+    moment_grad_V,
     make_param_vec_from_μ_Σ,
     make_μ_Σ_from_param_vec,
     make_param_vec_from_μ_U,

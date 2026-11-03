@@ -5,6 +5,26 @@ All notable changes to this project are documented here. The format is based on
 follows [Julia-style semantic versioning](https://pkgdocs.julialang.org/v1/compatibility/)
 (for `0.x` releases, a bump of the minor version may include breaking changes).
 
+## [Unreleased]
+
+### Changed
+
+- **Default `gamma` is now `1`** (was `0.2`) for `fit_mvnormal`, `fit_mvt`
+  and the global `set_loss_gamma!` setting, so mean and covariance entries
+  are weighted equally by default, matching the benchmarks of the paper.
+  The minimisers (zero set) are unchanged, but default loss values,
+  `info.loss` and optimiser paths differ. Pass `gamma = 0.2` to recover the
+  old behaviour.
+- **Log-Cholesky parameterisation (breaking).** The packed parameter vector
+  is now `(μ, V)` with `V_kk = log U_kk` and `V_kl = U_kl` for `k < l`, where
+  `UᵀU = Σ⁻¹`, so every real vector is valid and iterates cannot cross
+  `det U = 0`. Applies to `vector_moment_loss`, `vector_moment_loss_t`,
+  `vector_fg_true_loss`, `vector_fg_true_loss!`, `vector_fg_true_loss_t`,
+  `vector_grad_true_loss`, `make_param_vec_from_μ_Σ`, `make_param_vec_from_μ_U`
+  and `make_μ_Σ_from_param_vec`; `grad_true_loss` and `grad_true_loss_t` return
+  `(g_μ, g_V)`; `moment_grad_U` is renamed `moment_grad_V`. Line-search trial
+  points with `|V_kk| > 20` return a large finite penalty.
+
 ## [0.6.0] — 2026-10-22
 
 ### Changed

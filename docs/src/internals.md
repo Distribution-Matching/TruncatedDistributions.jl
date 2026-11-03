@@ -73,16 +73,17 @@ recomputes. The cache is invalidated automatically by
   the closed-form 1-D truncated-normal moment recurrence. Cheap.
 * `vector_fg_true_loss(F, G, p, …)` — combined-evaluation `fg!` for
   Optim's `only_fg!` interface, returning both the scalar loss and the
-  analytic gradient of `L(μ, U)` from a single Kan-Robotti recursion.
+  analytic gradient of `L(μ, V)` from a single Kan-Robotti recursion.
 * `block_coord_descent(μ̂, Σ̂, a, b)` — block updates on size-1, 2, 3
   marginals, with marginal- or full-loss acceptance and greedy or
   softmax block selection. Returns `(μ, Σ, hist, picks)`.
 
 ## Parameter packing
 
-LBFGS optimises an unconstrained parameter vector that interleaves `μ`
-with the upper triangle of `U`, where `U Uᵀ = Σ^{-1}`. This guarantees
-positive-definiteness of `Σ` for any `U`.
+LBFGS optimises an unconstrained parameter vector holding `μ` and the
+upper triangle of `V`, where `UᵀU = Σ^{-1}`, `V_kk = log U_kk` and
+`V_kl = U_kl` for `k < l` (the log-Cholesky parameterisation of the
+precision matrix). Every real vector gives a positive-definite `Σ`.
 
 ```julia
 p = make_param_vec_from_μ_Σ(μ, Σ)   # pack
