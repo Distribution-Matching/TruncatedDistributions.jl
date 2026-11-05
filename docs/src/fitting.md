@@ -105,6 +105,6 @@ meaning as for `fit_mvnormal`. On a box unbounded in some coordinate,
 maximum-likelihood equations of an exponential family; for the t they are
 not, and `fit_mvt` is a method-of-moments solver in its own right.
 
-See [Moment Matching of Box-Truncated Multivariate Normal and Student-t
-Distributions](https://github.com/Distribution-Matching/paper-truncated-mv-normal)
-for the derivation of the algorithms.
+See Carrizo Molina and Nazarathy, *Moment Matching of Box-Truncated
+Multivariate Normal and Student-t Distributions* (in preparation), for
+the derivation of the algorithms.
