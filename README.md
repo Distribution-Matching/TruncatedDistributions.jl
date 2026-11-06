@@ -387,8 +387,8 @@ separate repository:
   and Graphical Statistics*, 11(4), 950–971. (Algorithm behind the t box
   probabilities.)
 - The fitting algorithms and the truncated-t gradient are described in the
-  companion paper *Moment Matching of Box-Truncated Multivariate Normal and
-  Student-t Distributions* (Carrizo Molina & Nazarathy).
+  companion paper *Moment Matching of Box-Truncated Elliptical Distributions, with
+  Efficient Implementation for the Multivariate Normal and Student-t* (Carrizo Molina & Nazarathy).
 - Liquet, B. and Nazarathy, Y. (2015). "A dynamic view to moment matching of
   truncated distributions." *Statistics & Probability Letters*, 104, 87–93.
   https://doi.org/10.1016/j.spl.2015.05.006 (the univariate dynamic

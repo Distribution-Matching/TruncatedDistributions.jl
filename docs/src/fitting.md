@@ -106,5 +106,6 @@ maximum-likelihood equations of an exponential family; for the t they are
 not, and `fit_mvt` is a method-of-moments solver in its own right.
 
 See Carrizo Molina and Nazarathy, *Moment Matching of Box-Truncated
-Multivariate Normal and Student-t Distributions* (in preparation), for
+Elliptical Distributions, with Efficient Implementation for the
+Multivariate Normal and Student-t* (in preparation), for
 the derivation of the algorithms.

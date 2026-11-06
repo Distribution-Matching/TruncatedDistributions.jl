@@ -41,7 +41,8 @@ Depth = 2
 ## Citing
 
 If you use this package in published work, please cite Kan and Robotti
-(2017) for the recursive moment formula and the companion paper
-*Moment Matching of Box-Truncated Multivariate Normal and Student-t
-Distributions*
+(2017) and Galarza et al. (2021) for the recursive moment formulas and
+the companion paper *Moment Matching of Box-Truncated Elliptical
+Distributions, with Efficient Implementation for the Multivariate Normal
+and Student-t*
 for the fitting algorithms.
