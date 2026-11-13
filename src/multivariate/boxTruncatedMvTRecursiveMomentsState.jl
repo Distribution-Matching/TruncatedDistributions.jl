@@ -191,13 +191,15 @@ function compute_moments(d::BoxTruncatedMvTRecursiveMomentsState)
                 F0 = 0.0
             end
             comp = d.complement_idx[j]
-            # n == 1: the face is a point and its "raw moment" is 1.
-            F1 = d.n == 1 ? 1.0 : raw_moment(d.children_a[j], @view k[comp])
-            F2 = d.n == 1 ? 1.0 : raw_moment(d.children_b[j], @view k[comp])
             # At an infinite face fH = 0 and the term vanishes whenever the
-            # moment exists (checked at construction); skip to avoid Inf * 0.
-            a_term = iszero(d.fH_a[j]) ? 0.0 : d.r.a[j]^k[j] * d.fH_a[j] * F1
-            b_term = iszero(d.fH_b[j]) ? 0.0 : d.r.b[j]^k[j] * d.fH_b[j] * F2
+            # moment exists (checked at construction). The face moment is
+            # then not computed at all: this avoids Inf * 0 and the
+            # base-case integrals of that face's sub-recursion.
+            # n == 1: the face is a point and its "raw moment" is 1.
+            a_term = iszero(d.fH_a[j]) ? 0.0 : d.r.a[j]^k[j] * d.fH_a[j] *
+                (d.n == 1 ? 1.0 : raw_moment(d.children_a[j], @view k[comp]))
+            b_term = iszero(d.fH_b[j]) ? 0.0 : d.r.b[j]^k[j] * d.fH_b[j] *
+                (d.n == 1 ? 1.0 : raw_moment(d.children_b[j], @view k[comp]))
             c[j] = k[j] * F0 + a_term - b_term
         end
         c

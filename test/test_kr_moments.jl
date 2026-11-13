@@ -125,3 +125,29 @@ end
     @test isfinite(moment(d, [1, 2]))
     @test isfinite(moment(d, [3, 3]))
 end
+
+# A face term is weighted by the univariate density at that face, which is
+# exactly 0 at an infinite bound, so the face's sub-recursion must never be
+# evaluated (it would only cost base-case integrals). The moments themselves
+# are checked against cubature above, including on the semi-infinite examples.
+@testset "faces at infinite bounds are not evaluated" begin
+    μ = [0.2, -0.1, 0.3]
+    Σ = [1.0 0.4 0.2; 0.4 1.0 0.3; 0.2 0.3 1.0]
+    a = [-Inf, -1.0, -Inf]
+    b = [1.0, Inf, 2.0]
+    prev = set_kr_base_backend!(:hcubature)
+    try
+        for d in (TruncatedMvNormal(μ, Σ, a, b; max_moment_levels = 4),
+                  TruncatedMvT(7.0, μ, Σ, a, b; max_moment_levels = 4))
+            s = d.state
+            raw_moment(s, zeros(Int, 3))
+            for j in 1:3
+                @test s.children_a[j].rawMomentsComputed == isfinite(a[j])
+                @test s.children_b[j].rawMomentsComputed == isfinite(b[j])
+            end
+            @test all(isfinite, values(raw_moment_dict(s)))
+        end
+    finally
+        set_kr_base_backend!(prev)
+    end
+end

@@ -279,18 +279,20 @@ function compute_moments(d::BoxTruncatedMvNormalRecursiveMomentsState)
             else
                 F0 = 0.0
             end
-            # F1, F2: lower-dimensional truncated moments at the j-th box face.
+            # Face terms: the 1D Gaussian pdf at the j-th lower / upper box
+            # face (precomputed; pdf(N(μ,σ), ±Inf) = 0) times the
+            # lower-dimensional truncated moment at that face. When the pdf
+            # vanishes the term is exactly 0, so the face moment is not
+            # computed at all. This skips every face at an infinite bound,
+            # whose sub-recursion would otherwise cost base-case integrals,
+            # and avoids the indeterminate a^k * phi(a) = Inf * 0 = NaN
+            # (the true limit is 0 since the Gaussian decays
+            # super-polynomially).
             comp = d.complement_idx[j]
-            F1 = isempty(d.children_a) ? 0.0 : raw_moment(d.children_a[j], @view k[comp])
-            F2 = isempty(d.children_b) ? 0.0 : raw_moment(d.children_b[j], @view k[comp])
-            # 1D Gaussian pdf at the j-th lower / upper box face — precomputed
-            # at construction; constants in the inner loop. pdf(N(μ,σ), ±Inf) = 0.
-            # Guard against the indeterminate form: when the box face is at
-            # ±∞ and k[j] ≥ 1, naïvely a^k * phi(a) evaluates as Inf * 0 = NaN,
-            # but the true limit is 0 because the Gaussian decays
-            # super-polynomially. Skip the term when phi vanishes.
-            a_term = iszero(d.phi_a[j]) ? 0.0 : d.r.a[j]^k[j] * d.phi_a[j] * F1
-            b_term = iszero(d.phi_b[j]) ? 0.0 : d.r.b[j]^k[j] * d.phi_b[j] * F2
+            a_term = (isempty(d.children_a) || iszero(d.phi_a[j])) ? 0.0 :
+                d.r.a[j]^k[j] * d.phi_a[j] * raw_moment(d.children_a[j], @view k[comp])
+            b_term = (isempty(d.children_b) || iszero(d.phi_b[j])) ? 0.0 :
+                d.r.b[j]^k[j] * d.phi_b[j] * raw_moment(d.children_b[j], @view k[comp])
             c[j] = k[j]*F0 + a_term - b_term
         end
         c
