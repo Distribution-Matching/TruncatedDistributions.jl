@@ -61,3 +61,40 @@ end
         set_kr_base_backend!(prev)
     end
 end
+
+# A state of the t recursion with at most 2 degrees of freedom has no helper
+# t_{ν-2}, so its moments are computed by direct cubature instead. For the
+# gradient's root t_{ν+2} at order 4 this happens exactly when ν ≤ 3 (every
+# state has degrees of freedom minus order equal to ν - 2). Check that the
+# path is taken and that the moments still match the reference, on a bounded
+# box with ν = 1.5 and on a one-sided box with ν = 2.5.
+@testset "Student-t states without a helper (low degrees of freedom)" begin
+    function n_direct(s, seen = IdDict())
+        haskey(seen, s) && return 0
+        seen[s] = true
+        c = (s.direct && s.rawMomentsComputed) ? 1 : 0
+        for ch in vcat(s.children_a, s.children_b)
+            c += n_direct(ch, seen)
+        end
+        s.helper !== nothing && (c += n_direct(s.helper, seen))
+        return c
+    end
+    prev = set_kr_base_backend!(:hcubature)
+    try
+        μ = [0.2, -0.1]
+        Σ = [1.0 0.4; 0.4 1.0]
+        for (ν, a, b) in ((1.5, [-1.0, -1.5], [2.0, 1.0]),
+                          (2.5, [-1.0, -1.5], [2.0, Inf]))
+            νr, Σr = ν + 2, ν / (ν + 2) .* Σ          # the gradient's root law
+            d = TruncatedMvT(νr, μ, Σr, a, b; max_moment_levels = 4)
+            @testset "ν=$ν, b=$b" begin
+                for κ in _t_multi_indices(2, 4)
+                    @test raw_moment(d, κ) ≈ _t_reference_moment(νr, μ, Σr, a, b, κ) rtol = 1e-6 atol = 1e-8
+                end
+                @test n_direct(d.state) > 0
+            end
+        end
+    finally
+        set_kr_base_backend!(prev)
+    end
+end
