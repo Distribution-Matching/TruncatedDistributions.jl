@@ -207,12 +207,12 @@ function vector_fg_true_loss_t(F, G, p::Vector{Float64}, ν, a, b, μ̂, Σ̂)
     end
     μ, U, Σ = _unpack_μ_U_Σ(p)
     P = t_moment_matching_pair(ν, μ, Σ, a, b)
-    if G !== nothing
+    L = moment_loss_t(P, μ̂, Σ̂)
+    if G !== nothing && L < _LOSS_PENALTY
         g_μ, g_V = grad_true_loss_t(P, U, μ̂, Σ̂)
         G .= _pack_μ_V(g_μ, g_V)
     end
-    F !== nothing && return moment_loss_t(P, μ̂, Σ̂)
-    return nothing
+    return _guard_fg(F, G, L)
 end
 
 """
@@ -284,6 +284,7 @@ function fit_mvt(ν::Real, μ̂::AbstractVector, Σ̂::AbstractMatrix,
     length(a) == n == length(b) ||
         throw(DimensionMismatch("a, b must have length $(n)"))
     all(a .< b) || throw(ArgumentError("each a[i] must be strictly less than b[i]"))
+    _check_target(μ̂, Σ̂, a, b)
     ν > 0 || throw(ArgumentError("degrees of freedom must be positive; got ν = $ν"))
     if any(isinf, a) || any(isinf, b)
         ν > 2 || throw(ArgumentError(
@@ -296,11 +297,14 @@ function fit_mvt(ν::Real, μ̂::AbstractVector, Σ̂::AbstractMatrix,
     prev_rng = seed === nothing ? nothing : set_kr_base_rng!(MersenneTwister(seed))
     try
         t_ws = @elapsed if μ_init === nothing || Σ_init === nothing
-            μ_ws, Σ_ws = warm_start_diagonal_t(ν, μ̂_v, Σ̂_m, a_v, b_v)
+            μ_ws, Σ_ws = _warm_start_or_naive(
+                () -> warm_start_diagonal_t(ν, μ̂_v, Σ̂_m, a_v, b_v),
+                μ̂_v, (ν > 2 ? (ν - 2) / ν : 1.0) .* Σ̂_m)
             μ_init === nothing && (μ_init = μ_ws)
             Σ_init === nothing && (Σ_init = Σ_ws)
         end
         p0 = make_param_vec_from_μ_Σ(collect(Float64, μ_init), Matrix{Float64}(Σ_init))
+        _check_start(vector_moment_loss_t(p0, ν, a_v, b_v, μ̂_v, Σ̂_m))
         fg!(F, G, p) = vector_fg_true_loss_t(F, G, p, ν, a_v, b_v, μ̂_v, Σ̂_m)
         opts = Optim.Options(show_trace = verbose, iterations = iterations,
                              time_limit = time_limit,

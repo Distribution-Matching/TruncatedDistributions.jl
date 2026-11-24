@@ -234,3 +234,33 @@ end
     @test maximum(abs, mean(dt) - mtt) < 1e-4
     @test maximum(abs, cov(dt) - Stt) < 1e-4
 end
+
+@testset "fit on an unattainable target (example 2.3, rounded)" begin
+    a, b = [-1.0, -Inf], [0.5, 1.0]
+    μ̃, Σ̃ = [-0.2, -0.4], [0.2 0.2; 0.2 0.6]
+    # The warm start throws on the first axis (no univariate solution);
+    # the fit falls back to the naive start, warns, and still minimises.
+    @test_throws InfeasibleMomentsError warm_start_diagonal(μ̃, Σ̃, a, b)
+    d0 = @test_logs (:warn, r"Warm start failed") match_mode = :any fit(
+        TruncatedMvNormal, μ̃, Σ̃, a, b; iterations = 20, seed = 1)
+    @test d0 isa TruncatedMvNormal
+    # From the naive start the fit runs, stalls above the target, and warns.
+    d = @test_logs (:warn, r"Loss target not reached") match_mode = :any fit(
+        TruncatedMvNormal, μ̃, Σ̃, a, b; μ_init = μ̃, Σ_init = Σ̃,
+        ftarget = 1e-12, iterations = 20, seed = 1)
+    @test d isa TruncatedMvNormal
+end
+
+@testset "fit rejects targets that no law on the box can have" begin
+    a, b = [-1.0, -2.0], [2.0, 1.0]
+    S = [0.5 0.1; 0.1 0.5]
+    for f in (args -> fit_mvnormal(args...), args -> fit_mvt(5.0, args...))
+        @test_throws ArgumentError f(([3.0, 0.0], S, a, b))              # mean outside A
+        @test_throws ArgumentError f(([0.2, -0.2], [0.5 0.6; 0.6 0.5], a, b))  # not PD
+        @test_throws ArgumentError f(([0.2, -0.2], [0.5 0.1; 0.3 0.5], a, b))  # not symmetric
+        @test_throws ArgumentError f(([NaN, -0.2], S, a, b))                    # not finite
+    end
+    # A user start that puts no mass on the box (normal tails underflow).
+    @test_throws ArgumentError fit_mvnormal([0.2, -0.2], S, a, b;
+                                            μ_init = [60.0, 60.0], Σ_init = S)
+end

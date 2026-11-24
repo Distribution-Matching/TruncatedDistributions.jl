@@ -104,7 +104,18 @@ normal_examples[2] = [
                     tp = 0.6046944921624118,
                     μ̂ = [ 0.12213214335225087, -0.12213214335225087],
                     Σ̂ = [0.4081962800466608  0.05396791660268199;
-                         0.05396791660268199 0.40819628004683206])
+                         0.05396791660268199 0.40819628004683206]),
+    # Wilhelm & Manjunath (2010), "tmvtnorm: A package for the truncated
+    # multivariate normal distribution", The R Journal 2(1), running example.
+    # Published: P(X ∈ A) = 0.432, μ* = (-0.122, 0), Σ* = [0.165 0.131; 0.131 1.458].
+    NormalExample(  μ = [0.5, 0.5],
+                    Σ = [1.0 0.8;
+                         0.8 2.0],
+                    a = [-1.0, -Inf],
+                    b = [ 0.5,  4.0],
+                    tp = NaN,
+                    μ̂  = zeros(2),
+                    Σ̂  = zeros(2, 2))
 ]
 normal_examples[3] = [
     NormalExample(  μ = [3.5,2,3.5],
@@ -142,6 +153,29 @@ normal_examples[3] = [
                     a = [-Inf, -Inf, -Inf],
                     b = [ 1.0,  4.0,  2.0],
                     tp = 0.827984897456834,
+                    μ̂  = zeros(3),
+                    Σ̂  = zeros(3, 3)),
+    # Manjunath & Wilhelm (2021), Example 2: only x1 truncated, x2 and x3
+    # unbounded. Published: μ* = (-0.210, -0.229, 0),
+    # Σ* = [0.174 0.190 0; 0.190 0.898 -0.8; 0 -0.8 3.0].
+    NormalExample(  μ = [0.0, 0.0, 0.0],
+                    Σ = [1.1  1.2  0.0;
+                         1.2  2.0 -0.8;
+                         0.0 -0.8  3.0],
+                    a = [-1.0, -Inf, -Inf],
+                    b = [ 0.5,  Inf,  Inf],
+                    tp = NaN,
+                    μ̂  = zeros(3),
+                    Σ̂  = zeros(3, 3)),
+    # The running example of the documentation of the R package MomTrunc
+    # (Galarza et al.), e.g. ?meanvarTMD: a fully bounded trivariate box.
+    NormalExample(  μ = [0.1, 0.2, 0.3],
+                    Σ = [1.0 0.2 0.3;
+                         0.2 1.0 0.4;
+                         0.3 0.4 1.0],
+                    a = [-0.8, -0.7, -0.6],
+                    b = [ 0.5,  0.6,  0.7],
+                    tp = NaN,
                     μ̂  = zeros(3),
                     Σ̂  = zeros(3, 3))
 ]
@@ -235,7 +269,22 @@ const _genz_phi8 = NormalExample(n = 8, μ = zeros(8),
     b = collect( 9.0:-1.0: 2.0),
     tp = 0.32395, μ̂ = zeros(8), Σ̂ = zeros(8, 8))
 
-normal_examples[5]  = vcat(_make_high_n_examples(5), [_genz_phi5])
+# Manjunath & Wilhelm (2021), Example 3: the mathematics-marks example
+# (Whittaker 1990), given by its precision matrix Ω; (W, V, X) truncated to
+# [-2, 1] × [-1, 1] × [0, 1], (Y, Z) unbounded. Published: the precision
+# after truncation has diagonal (1.88, 3.45, 12.67, 1, 1).
+const _mw_example3 = let Ω = [1.0  0.2  0.3 0.0 0.0;
+                              0.2  1.0 -0.1 0.0 0.0;
+                              0.3 -0.1  1.0 0.4 0.5;
+                              0.0  0.0  0.4 1.0 0.2;
+                              0.0  0.0  0.5 0.2 1.0]
+    Σ = inv(Ω)
+    NormalExample(n = 5, μ = zeros(5), Σ = (Σ + Σ') / 2,
+                  a = [-2.0, -1.0, 0.0, -Inf, -Inf],
+                  b = [ 1.0,  1.0, 1.0,  Inf,  Inf],
+                  tp = NaN, μ̂ = zeros(5), Σ̂ = zeros(5, 5))
+end
+normal_examples[5]  = vcat(_make_high_n_examples(5), [_genz_phi5, _mw_example3])
 normal_examples[6]  = _make_high_n_examples(6)
 normal_examples[7]  = _make_high_n_examples(7)
 normal_examples[8]  = vcat(_make_high_n_examples(8), [_genz_phi8])

@@ -32,3 +32,17 @@ function _warm_start_diagonal(family, μ̂::AbstractVector, Σ̂::AbstractMatrix
     C = Σ̂ ./ (σ̂ * σ̂')
     return μ_ws, (σ_ws * σ_ws') .* C
 end
+
+# Warm start, or the naive start when some axis has no univariate solution.
+# The fit then still minimises the loss; the warning says why it starts
+# where it does (the target may be unattainable).
+function _warm_start_or_naive(ws::Function, μ_naive, Σ_naive)
+    try
+        return ws()
+    catch e
+        e isa InfeasibleMomentsError || rethrow()
+        @warn "Warm start failed, starting from the naive point instead; " *
+              "the target may be unattainable. " * sprint(showerror, e)
+        return collect(Float64, μ_naive), Matrix{Float64}(Σ_naive)
+    end
+end

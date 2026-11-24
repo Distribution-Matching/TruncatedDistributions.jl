@@ -135,6 +135,17 @@ end
 # G is not nothing. Inside an LBFGS iteration the same dist is reused for
 # both the loss and the gradient, so a single Kan–Robotti recursion serves
 # both — avoiding the doubled work of separate f and g! calls.
+# Where the box carries (numerically) no mass the moments, and with them
+# the gradient, are not finite. Report the penalty loss with a zero
+# gradient there, so that the line search backs off.
+function _guard_fg(F, G, L)
+    if !(L < _LOSS_PENALTY) || (G !== nothing && !all(isfinite, G))
+        G !== nothing && fill!(G, 0.0)
+        return F !== nothing ? _LOSS_PENALTY : nothing
+    end
+    return F !== nothing ? L : nothing
+end
+
 function vector_fg_true_loss(F, G, p::Vector{Float64}, a, b,
                              μ̂::Vector{Float64}, Σ̂::Matrix{Float64})
     if !_param_vec_admissible(p)
@@ -149,14 +160,12 @@ function vector_fg_true_loss(F, G, p::Vector{Float64}, a, b,
     Σsym .+= eps(Float64) * (tr(Σsym) + 1.0) * Matrix{Float64}(I, size(Σsym))
     d = RecursiveMomentsBoxTruncatedMvNormal(μ, PDMat(Σsym), a, b; max_moment_levels = 4)
 
+    L = moment_loss(d, μ̂, Σ̂)
     if G !== nothing
         g_μ, g_V = grad_true_loss(d, μ̂, Σ̂; U = U)
         G .= _pack_μ_V(g_μ, g_V)
     end
-    if F !== nothing
-        return moment_loss(d, μ̂, Σ̂)
-    end
-    return nothing
+    return _guard_fg(F, G, L)
 end
 
 # Workspace-aware variant: takes a pre-built KR-tree state and refreshes it
@@ -179,12 +188,10 @@ function vector_fg_true_loss!(F, G, p::Vector{Float64},
     update_distribution!(state, μ, PDMat(Σsym))
     d = outer_dist_from_state(state)
 
+    L = moment_loss(d, μ̂, Σ̂)
     if G !== nothing
         g_μ, g_V = grad_true_loss(d, μ̂, Σ̂; U = U)
         G .= _pack_μ_V(g_μ, g_V)
     end
-    if F !== nothing
-        return moment_loss(d, μ̂, Σ̂)
-    end
-    return nothing
+    return _guard_fg(F, G, L)
 end

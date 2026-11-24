@@ -42,7 +42,9 @@ and the BCD accept/reject path built on them — repeat run to run.
 # Common keyword arguments
 
 * `μ_init`, `Σ_init` — starting point for the optimiser. If omitted, the
-                      coordinate warm-start is used.
+                      coordinate warm-start is used, or the naive point
+                      `(μ̂, Σ̂)`, with a warning, if some axis has no
+                      univariate solution.
 * `ftarget`         — stop when the loss falls below this (default 1e-4).
 * `gamma`           — covariance-term weight (default 1); see Notes.
 * `seed`            — if given, seed the base-case RNG for a reproducible
@@ -120,6 +122,7 @@ function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
         throw(DimensionMismatch("a, b must have length $(n)"))
     all(a .< b) ||
         throw(ArgumentError("each a[i] must be strictly less than b[i]"))
+    _check_target(μ̂, Σ̂, a, b)
 
     chosen = method === :auto ? (n <= n_threshold ? :lbfgs : :bcd) : method
     chosen in (:lbfgs, :bcd) ||
@@ -138,12 +141,14 @@ function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
     try
         # Warm-start unless caller supplied an initial point.
         if μ_init === nothing || Σ_init === nothing
-            μ_ws, Σ_ws = warm_start_diagonal(μ̂_v, Σ̂_m, a_v, b_v)
+            μ_ws, Σ_ws = _warm_start_or_naive(
+                () -> warm_start_diagonal(μ̂_v, Σ̂_m, a_v, b_v), μ̂_v, Σ̂_m)
             μ_init === nothing && (μ_init = μ_ws)
             Σ_init === nothing && (Σ_init = Σ_ws)
         end
         μ0 = collect(Float64, μ_init)
         Σ0 = Matrix{Float64}(Σ_init)
+        _check_start(vector_moment_loss(make_param_vec_from_μ_Σ(μ0, Σ0), a_v, b_v, μ̂_v, Σ̂_m))
 
         if chosen === :lbfgs
             return _fit_mvnormal_lbfgs(μ̂_v, Σ̂_m, a_v, b_v, μ0, Σ0;
@@ -174,6 +179,31 @@ function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
         set_loss_gamma!(prev_gamma)
         prev_rng === nothing || set_kr_base_rng!(prev_rng)
     end
+end
+
+# A target is a mean and covariance of some law on the box: the mean lies
+# strictly inside it and the covariance is symmetric positive definite.
+# Anything else is not a target (and would make the naive start invalid).
+function _check_target(μ̂, Σ̂, a, b)
+    all(isfinite, μ̂) && all(isfinite, Σ̂) ||
+        throw(ArgumentError("the target mean and covariance must be finite"))
+    all(a .< μ̂ .< b) || throw(ArgumentError(
+        "the target mean must lie strictly inside the box [a, b]; got μ̂ = $(μ̂)"))
+    issymmetric(Σ̂) || isapprox(Σ̂, Σ̂'; rtol = 1e-10) || throw(ArgumentError(
+        "the target covariance must be symmetric"))
+    isposdef(Symmetric(Matrix{Float64}(Σ̂))) || throw(ArgumentError(
+        "the target covariance must be positive definite"))
+    return nothing
+end
+
+# The fit cannot start where the box carries (numerically) no mass, since
+# the loss is then not defined. The warm and naive starts never do this;
+# a user-supplied start far from the box can.
+function _check_start(L0)
+    L0 < _LOSS_PENALTY || throw(ArgumentError(
+        "the starting point puts (numerically) no mass on the box; " *
+        "choose μ_init and Σ_init so that the box has positive probability"))
+    return nothing
 end
 
 # Joint LBFGS on the packed (μ, V) parameter vector (V: U with the log of its diagonal) with the explicit
