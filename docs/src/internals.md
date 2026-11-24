@@ -71,8 +71,12 @@ recomputes. The cache is invalidated automatically by
 
 ## Moment matching
 
-* `warm_start_diagonal(μ̂, Σ̂, a, b)` — `n` independent 1-D LBFGS runs on
-  the closed-form 1-D truncated-normal moment recurrence. Cheap.
+* `warm_start_diagonal(μ̂, Σ̂, a, b)` and `warm_start_diagonal_t(ν, …)` —
+  `n` independent univariate fits by
+  `DistributionsFactories.truncated_locscale_params` (damped Newton on
+  closed-form truncated moments, microseconds per axis), with the
+  correlations of `Σ̂` kept. They throw `InfeasibleMomentsError` when an
+  axis has no univariate solution.
 * `vector_fg_true_loss(F, G, p, …)` — combined-evaluation `fg!` for
   Optim's `only_fg!` interface, returning both the scalar loss and the
   analytic gradient of `L(μ, V)` from a single Kan-Robotti recursion.

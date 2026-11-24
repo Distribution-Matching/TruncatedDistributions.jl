@@ -45,6 +45,21 @@ end
                    Σ̂   ./ (σ_hat * σ_hat'); atol = 1e-10)
 end
 
+@testset "warm_start_diagonal — semi-infinite axis and infeasible target" begin
+    # Intro example of the paper: axis 3 is [-1.5, ∞).
+    a, b = [-1.0, -2.0, -1.5], [2.0, 1.0, Inf]
+    μ̂ = [0.47, -0.19, -0.12]
+    Σ̂ = [0.54 0.16 0.11; 0.16 0.49 0.05; 0.11 0.05 0.65]
+    μ_ws, Σ_ws = warm_start_diagonal(μ̂, Σ̂, a, b)
+    for i in 1:3
+        m = moments(truncated(Normal(μ_ws[i], sqrt(Σ_ws[i, i])), a[i], b[i]), 2)
+        @test m[1] ≈ μ̂[i] atol = 1e-9
+        @test m[2] - m[1]^2 ≈ Σ̂[i, i] atol = 1e-9
+    end
+    # Variance above the uniform's on a bounded interval: no normal fits.
+    @test_throws InfeasibleMomentsError warm_start_diagonal([0.0], fill(0.5, 1, 1), [-1.0], [1.0])
+end
+
 @testset "fit_mvnormal :lbfgs — n=2 recovery" begin
     μ = [0.0, 0.0]
     Σ = [1.0 0.3; 0.3 1.0]

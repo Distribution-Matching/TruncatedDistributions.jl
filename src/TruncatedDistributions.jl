@@ -11,6 +11,7 @@ using NLSolversBase: only_fg!   # Optim 2 no longer re-exports only_fg!
 import ForwardDiff   # loads the DifferentiationInterface backend used by AutoForwardDiff under Optim 2
 using Combinatorics
 using MvNormalCDF
+using DistributionsFactories: truncated_locscale_params, InfeasibleMomentsError
 import AdditionalDistributions
 using Printf
 using Random
@@ -84,6 +85,7 @@ export
     # parameter fitting — lower-level building blocks
     warm_start_diagonal,
     warm_start_diagonal_t,
+    InfeasibleMomentsError,
     block_coord_descent,
     moment_loss_t,
     vector_moment_loss_t,

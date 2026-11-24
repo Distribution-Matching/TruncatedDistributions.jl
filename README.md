@@ -277,7 +277,7 @@ correcting joint correlation structure.
 ### Lower-level fitting API
 
 ```julia
-warm_start_diagonal(μ̂, Σ̂, a, b)   # coordinate-wise 1D LBFGS warm-start
+warm_start_diagonal(μ̂, Σ̂, a, b)   # coordinate-wise univariate warm start
 block_coord_descent(μ̂, Σ̂, a, b)   # underlying BCD (experimental); returns (μ, Σ, hist, picks)
 moment_loss(d, μ̂, Σ̂)              # γ-weighted scalar loss off the cached moments
 set_loss_gamma!(1.0)              # set the covariance weight γ globally

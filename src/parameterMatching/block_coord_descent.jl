@@ -365,8 +365,7 @@ function _block_update_marginal!(μ::Vector{Float64}, Σ::Matrix{Float64},
     return true
 end
 
-# 1D LBFGS fit: same as warm_start_diagonal but for a single axis given
-# a current iterate.
+# 1D LBFGS fit of a single axis, started from a current iterate.
 function _block_update_1d(μ0::Real, σ²0::Real,
                           ai::Real, bi::Real,
                           μ̂i::Real, Σ̂ii::Real,

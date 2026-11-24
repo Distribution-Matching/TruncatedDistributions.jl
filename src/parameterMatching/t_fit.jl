@@ -216,39 +216,20 @@ function vector_fg_true_loss_t(F, G, p::Vector{Float64}, ν, a, b, μ̂, Σ̂)
 end
 
 """
-    warm_start_diagonal_t(ν, μ̂, Σ̂, a, b; iters = 50) -> (μ_ws, Σ_ws)
+    warm_start_diagonal_t(ν, μ̂, Σ̂, a, b) -> (μ_ws, Σ_ws)
 
 Coordinate-wise warm start for the truncated multivariate-t
 moment-matching problem: the analogue of [`warm_start_diagonal`](@ref)
-with each axis fitted as a univariate truncated `t_ν(μ_i, σ_i²)`, and the
-correlation structure of `Σ̂` preserved exactly.
+with each axis fitted as a univariate truncated `t_ν(μ_i, σ_i²)` by
+`DistributionsFactories.truncated_locscale_params(TDist(ν), ...)`, and the
+correlation matrix of `Σ̂` kept.
+
+Throws `DistributionsFactories.InfeasibleMomentsError` if some axis has no
+univariate solution (or, on a two-sided axis, if the solver fails).
 """
 function warm_start_diagonal_t(ν::Real, μ̂::AbstractVector, Σ̂::AbstractMatrix,
-                               a::AbstractVector, b::AbstractVector; iters::Int = 50)
-    n = length(μ̂)
-    μ_ws = Vector{Float64}(undef, n)
-    σ²_ws = Vector{Float64}(undef, n)
-    scale0 = ν > 2 ? (ν - 2) / ν : 1.0
-    for i in 1:n
-        ai, bi, μ̂i, Σ̂ii = Float64(a[i]), Float64(b[i]), μ̂[i], Σ̂[i, i]
-        r = BoxTruncationRegion([ai], [bi])
-        function f(p)
-            s = BoxTruncatedMvTRecursiveMomentsState(ν, [p[1]], fill(exp(p[2]), 1, 1), r, 2)
-            m0 = raw_moment(s, [0])
-            (isfinite(m0) && m0 > eps()) || return 1e10
-            m1 = raw_moment(s, [1]) / m0
-            m2 = raw_moment(s, [2]) / m0
-            return (m1 - μ̂i)^2 + (m2 - m1^2 - Σ̂ii)^2
-        end
-        p0 = [μ̂i, log(max(scale0 * Σ̂ii, eps()))]
-        res = optimize(f, p0, NelderMead(), Optim.Options(iterations = 20 * iters))
-        μ_ws[i] = res.minimizer[1]
-        σ²_ws[i] = exp(res.minimizer[2])
-    end
-    σ̂ = sqrt.(diag(Σ̂))
-    C = Σ̂ ./ (σ̂ * σ̂')
-    σ = sqrt.(σ²_ws)
-    return μ_ws, (σ * σ') .* C
+                               a::AbstractVector, b::AbstractVector)
+    return _warm_start_diagonal(TDist(ν), μ̂, Σ̂, a, b)
 end
 
 """

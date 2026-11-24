@@ -84,7 +84,7 @@ small `n`), and `bcd_polish` (default `false`).
 ## Lower-level building blocks
 
 ```julia
-warm_start_diagonal(μ̂, Σ̂, a, b)   # coordinate-wise 1D LBFGS warm-start
+warm_start_diagonal(μ̂, Σ̂, a, b)   # coordinate-wise univariate warm start
 block_coord_descent(μ̂, Σ̂, a, b)   # underlying BCD (experimental); returns (μ, Σ, hist, picks)
 moment_loss(d, μ̂, Σ̂)              # scalar loss read off the cached moments
 ```
