@@ -363,12 +363,17 @@ function raw_moment_dict(d::BoxTruncatedMvNormalRecursiveMomentsState)
 end
 
 # Backend selector for the multivariate-Gaussian box probability that
-# bottoms out the Kan–Robotti recursion. `:hcubature` uses the
-# general-purpose adaptive cubature wrapper; `:mvnormalcdf` uses
+# bottoms out the Kan–Robotti recursion. `:mvnormalcdf` (the default) uses
 # `MvNormalCDF.mvnormcdf` (Genz–Bretz separation-of-variables + QMC),
-# which is dramatically faster on this specific integrand but Float64-only.
-# Switch with `set_kr_base_backend!(:mvnormalcdf)`.
-const _KR_BASE_BACKEND = Ref{Symbol}(:hcubature)
+# which is dramatically faster on this specific integrand but Float64-only;
+# for any other element type (e.g. ForwardDiff `Dual`) the base case falls
+# back to `:hcubature`, the general-purpose adaptive cubature wrapper.
+# Switch with `set_kr_base_backend!(:hcubature)`.
+const _KR_BASE_BACKEND = Ref{Symbol}(:mvnormalcdf)
+
+# Whether the QMC base case applies to a distribution with this element
+# type: only Float64 parameters can go through the Genz–Bretz routines.
+_kr_use_qmc(dist) = _KR_BASE_BACKEND[] === :mvnormalcdf && eltype(dist) === Float64
 
 """
     set_kr_base_backend!(backend::Symbol)
@@ -376,11 +381,13 @@ const _KR_BASE_BACKEND = Ref{Symbol}(:hcubature)
 Choose the integrator used for the multivariate-Gaussian box probability
 that bottoms out the Kan–Robotti recursion. Accepted values:
 
-  * `:hcubature`   — `hcubature_inf` (default; works with any element type
-                     compatible with HCubature).
-  * `:mvnormalcdf` — `MvNormalCDF.mvnormcdf` (Genz–Bretz, Float64 only;
+  * `:mvnormalcdf` — `MvNormalCDF.mvnormcdf` (default; Genz–Bretz QMC,
                      typically 10–100× faster on n ≥ 3 Gaussian box
                      probabilities and natively handles ±Inf bounds).
+                     Float64 only: for any other element type (e.g.
+                     ForwardDiff `Dual`) `:hcubature` is used instead.
+  * `:hcubature`   — `hcubature_inf` (deterministic; works with any element
+                     type compatible with HCubature).
 
 Returns the previous backend.
 """
@@ -433,10 +440,10 @@ get_kr_base_rng() = _KR_BASE_RNG[]
 
 function LL(d::BoxTruncatedMvNormalRecursiveMomentsState)
     # @info "doing base numerical integral on dimension $(d.n)."
-    if _KR_BASE_BACKEND[] === :mvnormalcdf
+    if _kr_use_qmc(d.d)
         # mvnormcdf returns (probability, error_estimate); we only need the
-        # value. Float64-only — for Dual-typed parameters the caller should
-        # leave the backend at :hcubature. m=10_000 quasi-Monte Carlo
+        # value. Float64-only — Dual-typed parameters fall through to
+        # hcubature below. m=10_000 quasi-Monte Carlo
         # samples typically gives ~1e-5 error in well under a millisecond
         # after JIT warm-up; that error is small enough not to perturb
         # downstream moments at the test cross-check tolerance.

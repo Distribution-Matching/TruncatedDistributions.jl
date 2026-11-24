@@ -77,6 +77,7 @@ export
     hcubature_inf,
 
     # parameter fitting — public front door
+    fit,
     fit_mvnormal,
     fit_mvt,
 
@@ -135,6 +136,7 @@ include("parameterMatching/warm_start.jl")
 include("parameterMatching/block_coord_descent.jl")
 include("parameterMatching/fit.jl")
 include("parameterMatching/t_fit.jl")
+include("parameterMatching/fit_distribution.jl")
 include("tools/dynamic_moment_matching.jl")
 
 end # module

@@ -76,6 +76,8 @@ hcubature_inf
 ## Moment matching
 
 ```@docs
+fit(::Type{<:TruncatedMvNormal}, ::AbstractVector, ::AbstractMatrix, ::AbstractVector, ::AbstractVector)
+fit(::Type{<:TruncatedMvT}, ::Real, ::AbstractVector, ::AbstractMatrix, ::AbstractVector, ::AbstractVector)
 fit_mvnormal
 warm_start_diagonal
 block_coord_descent

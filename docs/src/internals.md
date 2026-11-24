@@ -33,11 +33,13 @@ the tree via [`update_distribution!`](@ref) so the topology is reused.
 The base case of the recursion is the multivariate-normal box CDF.
 Switch backends with [`set_kr_base_backend!`](@ref):
 
-* `:hcubature`   — generic adaptive cubature; works with any element type
-                   (e.g. ForwardDiff `Dual`).
-* `:mvnormalcdf` — `MvNormalCDF.mvnormcdf` (Genz and Bretz, separation of
-                   variables + QMC); Float64-only; typically 10–100×
+* `:mvnormalcdf` — default; `MvNormalCDF.mvnormcdf` (Genz and Bretz,
+                   separation of variables + QMC); typically 10–100×
                    faster on `n ≥ 3` Gaussian box probabilities.
+                   Float64-only: other element types fall back to
+                   `:hcubature`.
+* `:hcubature`   — generic adaptive cubature; deterministic, works with
+                   any element type (e.g. ForwardDiff `Dual`).
 
 ### The Student-t recursion
 

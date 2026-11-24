@@ -93,12 +93,12 @@ per refresh compared to reconstructing.
 ## Choosing the base-case backend
 
 ```julia
-set_kr_base_backend!(:hcubature)     # default; type-flexible
-set_kr_base_backend!(:mvnormalcdf)   # Genz–Bretz QMC; Float64 only; faster
+set_kr_base_backend!(:mvnormalcdf)   # default; Genz–Bretz QMC; faster
+set_kr_base_backend!(:hcubature)     # deterministic; type-flexible
 ```
 
-Keep `:hcubature` when you need ForwardDiff `Dual` numbers; otherwise
-`:mvnormalcdf` is dramatically faster.
+`:mvnormalcdf` is Float64-only. With ForwardDiff `Dual` numbers the base
+case falls back to `:hcubature` automatically.
 
 ## The box-truncated multivariate t
 

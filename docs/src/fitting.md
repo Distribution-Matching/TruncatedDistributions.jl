@@ -12,6 +12,10 @@ using TruncatedDistributions
 a = [-1.0, -1.5]
 b = [ 1.5,  1.0]
 
+d = fit(TruncatedMvNormal, μ̂, Σ̂, a, b)   # the fitted distribution
+mean(d), cov(d)                          # ≈ (μ̂, Σ̂)
+
+# Same fit, returning the parameters and diagnostics:
 μ_fit, Σ_fit, info = fit_mvnormal(μ̂, Σ̂, a, b)
 @show info.method   # :lbfgs at this size; :bcd for n ≥ 9
 @show info.loss     # ½(1/n)‖μA − μ̂‖² + γ·½(1/n²)‖ΣA − Σ̂‖²_F
@@ -91,7 +95,8 @@ For the Student-t with fixed degrees of freedom `ν`, [`fit_mvt`](@ref)
 solves the same problem for the location `μ` and scale matrix `Σ`:
 
 ```julia
-μ_fit, Σ_fit, info = fit_mvt(5.0, μ̂, Σ̂, a, b)
+d = fit(TruncatedMvT, 5.0, μ̂, Σ̂, a, b)
+μ_fit, Σ_fit, info = fit_mvt(5.0, μ̂, Σ̂, a, b)   # with diagnostics
 ```
 
 It runs warm-started joint LBFGS ([`warm_start_diagonal_t`](@ref) for the

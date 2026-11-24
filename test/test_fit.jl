@@ -197,3 +197,25 @@ end
     @test isfinite(vector_fg_true_loss(1.0, G, q, a, b, μ, Σ))
     @test all(iszero, G)
 end
+
+@testset "fit(TruncatedMvNormal / TruncatedMvT, ...) returns the fitted law" begin
+    μ = [0.2, -0.1]; Σ = [1.0 0.3; 0.3 0.8]
+    a = [-1.0, -1.5]; b = [1.5, 1.0]
+    d0 = TruncatedMvNormal(μ, Σ, a, b)
+    mt, St = mean(d0), Matrix(cov(d0))
+    d = fit(TruncatedMvNormal, mt, St, a, b; ftarget = 1e-12, seed = 1)
+    @test d isa TruncatedMvNormal
+    @test params(d)[3] == a && params(d)[4] == b
+    @test maximum(abs, mean(d) - mt) < 1e-4
+    @test maximum(abs, cov(d) - St) < 1e-4
+    μf, Σf, _ = fit_mvnormal(mt, St, a, b; ftarget = 1e-12, seed = 1)
+    @test params(d)[1] ≈ μf
+
+    ν = 5.0
+    dt0 = TruncatedMvT(ν, μ, Σ, a, b)
+    mtt, Stt = mean(dt0), Matrix(cov(dt0))
+    dt = fit(TruncatedMvT, ν, mtt, Stt, a, b; ftarget = 1e-12, seed = 1)
+    @test dt isa TruncatedMvT
+    @test maximum(abs, mean(dt) - mtt) < 1e-4
+    @test maximum(abs, cov(dt) - Stt) < 1e-4
+end

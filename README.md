@@ -37,16 +37,17 @@ a dynamic, ODE-based moment matcher — addressing problems that
   in place with new `(μ, Σ)` via `update_distribution!` — used to keep
   the recursion's state graph across inner-loop optimiser iterations.
 - Two interchangeable backends for the base case of the recursion:
-  `:hcubature` (default, works with any element type) and `:mvnormalcdf`
-  (Genz and Bretz separation-of-variables + QMC; Float64-only, much
-  faster). The randomised `:mvnormalcdf` base case is seedable
+  `:mvnormalcdf` (default; Genz and Bretz separation-of-variables + QMC,
+  much faster, Float64-only) and `:hcubature` (deterministic, works with
+  any element type; used automatically for non-Float64 parameters). The randomised `:mvnormalcdf` base case is seedable
   (`set_kr_base_rng!`, or the `seed` keyword of `fit_mvnormal`) for a
   fully reproducible pipeline.
 - Monte-Carlo moments for high dimension: `mc_moments(d)` and an automatic
   `tp` / `mean` / `cov` fallback above `n = 6` (`set_moment_mc!`), where
   the recursion tree is infeasible to build. Fast even at `n = 20` via
   `BasicBoxTruncatedMvNormal`.
-- Optional moment-matching layer: `fit_mvnormal(μ̂, Σ̂, a, b)` recovers
+- Optional moment-matching layer: `fit(TruncatedMvNormal, μ̂, Σ̂, a, b)`
+  (or `fit_mvnormal(μ̂, Σ̂, a, b)`, which also returns diagnostics) recovers
   `(μ, Σ)` whose box-truncation has the requested moments, under a
   single per-entry covariance weight `γ` in an averaged loss (`gamma`,
   default `1`, so the mean and covariance entries are weighted equally). Picks joint LBFGS +
@@ -183,17 +184,19 @@ of milliseconds and hundreds of megabytes at `n = 6`.
 Two backends bottom out the recursion at the multivariate-normal box CDF:
 
 ```julia
-set_kr_base_backend!(:hcubature)     # default; type-flexible (Dual numbers, BigFloat, …)
-set_kr_base_backend!(:mvnormalcdf)   # Genz–Bretz QMC; Float64 only; much faster
+set_kr_base_backend!(:mvnormalcdf)   # default; Genz–Bretz QMC; much faster
+set_kr_base_backend!(:hcubature)     # deterministic; type-flexible (Dual numbers, BigFloat, …)
 ```
 
-Stick with `:hcubature` when you differentiate through the distribution
-via ForwardDiff. Switch to `:mvnormalcdf` for plain Float64 work.
+`:mvnormalcdf` is Float64-only. When the parameters carry another element
+type, for example when you differentiate through the distribution via
+ForwardDiff, the base case falls back to `:hcubature` automatically.
+Select `:hcubature` explicitly when you want a deterministic base case.
 
-## Moment-matching: `fit_mvnormal`
+## Moment-matching: `fit`
 
 Given target moments `(μ̂, Σ̂)`, find `(μ, Σ)` whose box-truncation to
-`[a, b]` reproduces them.
+`[a, b]` reproduces them. `fit` returns the fitted distribution:
 
 ```julia
 μ̂ = [0.12, -0.12]
@@ -201,6 +204,15 @@ Given target moments `(μ̂, Σ̂)`, find `(μ, Σ)` whose box-truncation to
 a = [-1.0, -1.5]
 b = [ 1.5,  1.0]
 
+d = fit(TruncatedMvNormal, μ̂, Σ̂, a, b)
+mean(d), cov(d)     # ≈ (μ̂, Σ̂)
+params(d)           # (μ, Σ, a, b)
+```
+
+`fit_mvnormal` takes the same arguments and keywords and returns the
+parameters together with the fitting diagnostics:
+
+```julia
 μ_fit, Σ_fit, info = fit_mvnormal(μ̂, Σ̂, a, b)
 @show info.method   # :lbfgs at this size; :bcd for n ≥ 9
 @show info.loss     # ½(1/n)‖μA − μ̂‖² + γ·½(1/n²)‖ΣA − Σ̂‖²_F
@@ -299,7 +311,8 @@ Moment matching for the truncated t:
 ```julia
 μ̂ = [0.10, -0.10]
 Σ̂ = [0.40 0.05; 0.05 0.40]
-μ_fit, Σ_fit, info = fit_mvt(5.0, μ̂, Σ̂, [-1.0, -1.5], [1.5, Inf])
+d = fit(TruncatedMvT, 5.0, μ̂, Σ̂, [-1.0, -1.5], [1.5, Inf])
+μ_fit, Σ_fit, info = fit_mvt(5.0, μ̂, Σ̂, [-1.0, -1.5], [1.5, Inf])   # with diagnostics
 ```
 
 `fit_mvt` runs warm-started joint LBFGS on the closed-form gradient of the

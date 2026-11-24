@@ -280,7 +280,7 @@ function LL(d::BoxTruncatedMvTRecursiveMomentsState)
         σ = sqrt(d.d.Σ[1, 1])
         T = TDist(d.ν)
         return cdf(T, (d.r.b[1] - d.d.μ[1]) / σ) - cdf(T, (d.r.a[1] - d.d.μ[1]) / σ)
-    elseif _KR_BASE_BACKEND[] === :mvnormalcdf && d.n ≥ 3
+    elseif _kr_use_qmc(d.d) && d.n ≥ 3
         return AdditionalDistributions.cdf_result(d.d, d.r.a, d.r.b;
                                                   m = _KR_T_QMC_M[], rng = _KR_BASE_RNG[]).value
     else

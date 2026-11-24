@@ -10,8 +10,8 @@ arbitrary multivariate raw moments via the recursive moment formula of
 [Kan and Robotti (2017)](https://doi.org/10.1080/10618600.2017.1322092).
 The **box-truncated multivariate Student-t** (`TruncatedMvT`) is supported
 on the same footing, with raw moments from a Student-t analogue of the
-recursion. A moment-matching parameter-fitting layer (`fit_mvnormal`,
-`fit_mvt`) sits on top.
+recursion. A moment-matching parameter-fitting layer (`fit`, with
+`fit_mvnormal` and `fit_mvt` for diagnostics) sits on top.
 
 The type hierarchy (`TruncatedMvDistribution{D, R, S}`) is generic in the
 underlying distribution `D`, the truncation region `R`, and the cached

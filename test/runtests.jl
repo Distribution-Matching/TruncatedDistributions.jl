@@ -10,6 +10,14 @@ import TruncatedDistributions: hcubature_inf
 
 @testset "TruncatedDistributions" begin
 
+    # The package default base case is the randomised-QMC `:mvnormalcdf`.
+    # Most tests below compare against published values or finite
+    # differences at tolerances only a deterministic base case meets, so
+    # the suite runs on `:hcubature`; testsets that exercise the QMC path
+    # switch to it explicitly.
+    @test get_kr_base_backend() === :mvnormalcdf
+    set_kr_base_backend!(:hcubature)
+
     include("test_regions.jl")
     include("test_univariate.jl")
     include("test_distribution_api.jl")
