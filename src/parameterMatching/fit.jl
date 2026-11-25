@@ -156,13 +156,11 @@ function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
         end
         μ0 = collect(Float64, μ_init)
         Σ0 = Matrix{Float64}(Σ_init)
-        start_loss(μs, Σs) = _safe_loss(() ->
-            vector_moment_loss(make_param_vec_from_μ_Σ(μs, Σs), a_v, b_v, μ̂_v, Σ̂_m))
-        if from_ws && !(start_loss(μ0, Σ0) < _LOSS_PENALTY)
+        if from_ws && !_has_mass(μ0, Σ0, a_v, b_v)
             @warn "The warm start puts (numerically) no mass on the box; starting from the naive point instead."
             μ0, Σ0 = copy(μ̂_v), copy(Σ̂_m)
         end
-        _check_start(start_loss(μ0, Σ0))
+        _has_mass(μ0, Σ0, a_v, b_v) || _throw_no_mass()
 
         if chosen === :lbfgs
             return _warn_unmet(_fit_mvnormal_lbfgs(μ̂_v, Σ̂_m, a_v, b_v, μ0, Σ0;
@@ -221,13 +219,32 @@ function _safe_loss(f)
 end
 
 # The fit cannot start where the box carries (numerically) no mass, since
-# the loss is then not defined. The warm and naive starts never do this;
+# the loss is then not defined. The warm and naive starts rarely do this;
 # a user-supplied start far from the box can.
 function _check_start(L0)
-    L0 < _LOSS_PENALTY || throw(ArgumentError(
-        "the starting point puts (numerically) no mass on the box; " *
-        "choose μ_init and Σ_init so that the box has positive probability"))
+    L0 < _LOSS_PENALTY || _throw_no_mass()
     return nothing
+end
+
+_throw_no_mass() = throw(ArgumentError(
+    "the starting point puts (numerically) no mass on the box; " *
+    "choose μ_init and Σ_init so that the box has positive probability"))
+
+# Whether N(μ, Σ) puts (numerically) positive mass on [a, b]. One QMC box
+# probability, cheap in any dimension, whereas the loss would build the
+# full n-dimensional recursion (prohibitive on the :bcd path). A private
+# fixed-seed RNG leaves the base-case stream of the fit untouched.
+function _has_mass(μ, Σ, a, b)
+    try
+        Σs = Symmetric(0.5 .* (Σ .+ Σ'))
+        isposdef(Σs) || return false
+        p = mvnormcdf(MvNormal(μ, Matrix(Σs)), a, b;
+                      m = 10_000, rng = MersenneTwister(0))[1]
+        return isfinite(p) && p >= eps(Float64)
+    catch e
+        _numerical_failure(e) || rethrow()
+        return false
+    end
 end
 
 # Joint LBFGS on the packed (μ, V) parameter vector (V: U with the log of its diagonal) with the explicit
