@@ -46,3 +46,13 @@ function _warm_start_or_naive(ws::Function, μ_naive, Σ_naive)
         return collect(Float64, μ_naive), Matrix{Float64}(Σ_naive)
     end
 end
+
+# The fit returns the law it reached even when the loss target is not met;
+# the target may then be unattainable, so say so. Passes the result through.
+function _warn_unmet(result, ftarget)
+    loss = result[3].loss
+    loss < ftarget ||
+        @warn "Loss target not reached: the moments are matched only approximately, " *
+              "and the target may be unattainable." loss ftarget
+    return result
+end

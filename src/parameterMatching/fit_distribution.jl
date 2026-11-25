@@ -3,16 +3,6 @@
 # `fit_mvt`, which remain available when the diagnostics in `info` are
 # wanted.
 
-# The fitted law is returned even when the loss target is not reached; the
-# target may then be unattainable, so say so.
-function _warn_unmet(info, kwargs)
-    ftarget = get(kwargs, :ftarget, 1e-4)
-    info.loss < ftarget ||
-        @warn "Loss target not reached: the moments are matched only approximately, " *
-              "and the target may be unattainable." loss = info.loss ftarget
-    return nothing
-end
-
 """
     fit(TruncatedMvNormal, μ̃, Σ̃, a, b; kwargs...) -> TruncatedMvNormal
 
@@ -32,8 +22,7 @@ mean(d), cov(d)          # ≈ (μ̃, Σ̃)
 function Distributions.fit(::Type{<:TruncatedMvNormal}, μ̂::AbstractVector,
                            Σ̂::AbstractMatrix, a::AbstractVector,
                            b::AbstractVector; kwargs...)
-    μ, Σ, info = fit_mvnormal(μ̂, Σ̂, a, b; kwargs...)
-    _warn_unmet(info, kwargs)
+    μ, Σ, _ = fit_mvnormal(μ̂, Σ̂, a, b; kwargs...)
     return TruncatedMvNormal(collect(μ), Matrix(Σ), a, b)
 end
 
@@ -50,7 +39,6 @@ with a warning. Warns if the loss target is not reached.
 function Distributions.fit(::Type{<:TruncatedMvT}, ν::Real, μ̂::AbstractVector,
                            Σ̂::AbstractMatrix, a::AbstractVector,
                            b::AbstractVector; kwargs...)
-    μ, Σ, info = fit_mvt(ν, μ̂, Σ̂, a, b; kwargs...)
-    _warn_unmet(info, kwargs)
+    μ, Σ, _ = fit_mvt(ν, μ̂, Σ̂, a, b; kwargs...)
     return TruncatedMvT(ν, collect(μ), Matrix(Σ), a, b)
 end

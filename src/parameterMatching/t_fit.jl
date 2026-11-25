@@ -201,6 +201,15 @@ its closed-form gradient on the packed `(μ, V)` vector. One shared
 recursion serves the loss and the gradient.
 """
 function vector_fg_true_loss_t(F, G, p::Vector{Float64}, ν, a, b, μ̂, Σ̂)
+    try
+        return _vector_fg_true_loss_t(F, G, p, ν, a, b, μ̂, Σ̂)
+    catch e
+        _numerical_failure(e) || rethrow()
+        return _guard_fg(F, G, Inf)
+    end
+end
+
+function _vector_fg_true_loss_t(F, G, p::Vector{Float64}, ν, a, b, μ̂, Σ̂)
     if !_param_vec_admissible(p)
         G !== nothing && fill!(G, 0.0)
         return F !== nothing ? _LOSS_PENALTY : nothing
@@ -296,6 +305,7 @@ function fit_mvt(ν::Real, μ̂::AbstractVector, Σ̂::AbstractMatrix,
     prev_gamma = set_loss_gamma!(gamma)
     prev_rng = seed === nothing ? nothing : set_kr_base_rng!(MersenneTwister(seed))
     try
+        from_ws = μ_init === nothing && Σ_init === nothing
         t_ws = @elapsed if μ_init === nothing || Σ_init === nothing
             μ_ws, Σ_ws = _warm_start_or_naive(
                 () -> warm_start_diagonal_t(ν, μ̂_v, Σ̂_m, a_v, b_v),
@@ -304,7 +314,11 @@ function fit_mvt(ν::Real, μ̂::AbstractVector, Σ̂::AbstractMatrix,
             Σ_init === nothing && (Σ_init = Σ_ws)
         end
         p0 = make_param_vec_from_μ_Σ(collect(Float64, μ_init), Matrix{Float64}(Σ_init))
-        _check_start(vector_moment_loss_t(p0, ν, a_v, b_v, μ̂_v, Σ̂_m))
+        if from_ws && !(_safe_loss(() -> vector_moment_loss_t(p0, ν, a_v, b_v, μ̂_v, Σ̂_m)) < _LOSS_PENALTY)
+            @warn "The warm start puts (numerically) no mass on the box; starting from the naive point instead."
+            p0 = make_param_vec_from_μ_Σ(μ̂_v, (ν > 2 ? (ν - 2) / ν : 1.0) .* Σ̂_m)
+        end
+        _check_start(_safe_loss(() -> vector_moment_loss_t(p0, ν, a_v, b_v, μ̂_v, Σ̂_m)))
         fg!(F, G, p) = vector_fg_true_loss_t(F, G, p, ν, a_v, b_v, μ̂_v, Σ̂_m)
         opts = Optim.Options(show_trace = verbose, iterations = iterations,
                              time_limit = time_limit,
@@ -314,7 +328,7 @@ function fit_mvt(ν::Real, μ̂::AbstractVector, Σ̂::AbstractMatrix,
         info = (; method = :lbfgs, loss = res.minimum, time = t + t_ws,
                   iterations = res.iterations, converged = Optim.converged(res),
                   res = res)
-        return μ_fit, Symmetric(Σ_fit), info
+        return _warn_unmet((μ_fit, Symmetric(Σ_fit), info), ftarget)
     finally
         set_loss_gamma!(prev_gamma)
         prev_rng === nothing || set_kr_base_rng!(prev_rng)

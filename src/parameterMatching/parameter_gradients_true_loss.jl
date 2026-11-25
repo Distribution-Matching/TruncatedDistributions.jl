@@ -146,8 +146,25 @@ function _guard_fg(F, G, L)
     return F !== nothing ? L : nothing
 end
 
+# A step to a nearly singular scale matrix can make a linear-algebra
+# routine of the recursion throw; treat that point like one where the box
+# carries no mass, so that the line search backs off.
+_numerical_failure(e) = e isa Union{LinearAlgebra.PosDefException,
+                                     LinearAlgebra.SingularException,
+                                     DomainError, OverflowError}
+
 function vector_fg_true_loss(F, G, p::Vector{Float64}, a, b,
                              μ̂::Vector{Float64}, Σ̂::Matrix{Float64})
+    try
+        return _vector_fg_true_loss(F, G, p, a, b, μ̂, Σ̂)
+    catch e
+        _numerical_failure(e) || rethrow()
+        return _guard_fg(F, G, Inf)
+    end
+end
+
+function _vector_fg_true_loss(F, G, p::Vector{Float64}, a, b,
+                              μ̂::Vector{Float64}, Σ̂::Matrix{Float64})
     if !_param_vec_admissible(p)
         G !== nothing && fill!(G, 0.0)
         return F !== nothing ? _LOSS_PENALTY : nothing

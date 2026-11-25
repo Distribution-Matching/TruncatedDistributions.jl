@@ -45,7 +45,8 @@ and the BCD accept/reject path built on them — repeat run to run.
                       coordinate warm-start is used, or the naive point
                       `(μ̂, Σ̂)`, with a warning, if some axis has no
                       univariate solution.
-* `ftarget`         — stop when the loss falls below this (default 1e-4).
+* `ftarget`         — stop when the loss falls below this (default 1e-4);
+                      a warning is issued if the fit ends above it.
 * `gamma`           — covariance-term weight (default 1); see Notes.
 * `seed`            — if given, seed the base-case RNG for a reproducible
                       fit (default `nothing`, i.e. non-deterministic QMC).
@@ -140,6 +141,7 @@ function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
     prev_rng = seed === nothing ? nothing : set_kr_base_rng!(MersenneTwister(seed))
     try
         # Warm-start unless caller supplied an initial point.
+        from_ws = μ_init === nothing && Σ_init === nothing
         if μ_init === nothing || Σ_init === nothing
             μ_ws, Σ_ws = _warm_start_or_naive(
                 () -> warm_start_diagonal(μ̂_v, Σ̂_m, a_v, b_v), μ̂_v, Σ̂_m)
@@ -148,20 +150,26 @@ function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
         end
         μ0 = collect(Float64, μ_init)
         Σ0 = Matrix{Float64}(Σ_init)
-        _check_start(vector_moment_loss(make_param_vec_from_μ_Σ(μ0, Σ0), a_v, b_v, μ̂_v, Σ̂_m))
+        start_loss(μs, Σs) = _safe_loss(() ->
+            vector_moment_loss(make_param_vec_from_μ_Σ(μs, Σs), a_v, b_v, μ̂_v, Σ̂_m))
+        if from_ws && !(start_loss(μ0, Σ0) < _LOSS_PENALTY)
+            @warn "The warm start puts (numerically) no mass on the box; starting from the naive point instead."
+            μ0, Σ0 = copy(μ̂_v), copy(Σ̂_m)
+        end
+        _check_start(start_loss(μ0, Σ0))
 
         if chosen === :lbfgs
-            return _fit_mvnormal_lbfgs(μ̂_v, Σ̂_m, a_v, b_v, μ0, Σ0;
+            return _warn_unmet(_fit_mvnormal_lbfgs(μ̂_v, Σ̂_m, a_v, b_v, μ0, Σ0;
                                        ftarget = ftarget,
                                        time_limit = time_limit,
                                        iterations = iterations === nothing ? 50 : iterations,
-                                       verbose = verbose)
+                                       verbose = verbose), ftarget)
         else  # :bcd
             # Softmax draws use a separate seeded stream from the base-case
             # QMC (seed + 1) so both are reproducible and uncorrelated.
             bcd_rng = seed === nothing ? Random.default_rng() :
                       MersenneTwister(seed + 1)
-            return _fit_mvnormal_bcd(μ̂_v, Σ̂_m, a_v, b_v, μ0, Σ0;
+            return _warn_unmet(_fit_mvnormal_bcd(μ̂_v, Σ̂_m, a_v, b_v, μ0, Σ0;
                                      ftarget = ftarget,
                                      iterations = iterations === nothing ? 30 : iterations,
                                      verbose = verbose,
@@ -173,7 +181,7 @@ function fit_mvnormal(μ̂::AbstractVector, Σ̂::AbstractMatrix,
                                      polish = bcd_polish,
                                      polish_iterations = bcd_polish_iterations,
                                      time_limit = time_limit,
-                                     rng = bcd_rng)
+                                     rng = bcd_rng), ftarget)
         end
     finally
         set_loss_gamma!(prev_gamma)
@@ -194,6 +202,16 @@ function _check_target(μ̂, Σ̂, a, b)
     isposdef(Symmetric(Matrix{Float64}(Σ̂))) || throw(ArgumentError(
         "the target covariance must be positive definite"))
     return nothing
+end
+
+# Loss at a start point, with numerical failures read as "no mass".
+function _safe_loss(f)
+    try
+        return f()
+    catch e
+        _numerical_failure(e) || rethrow()
+        return _LOSS_PENALTY
+    end
 end
 
 # The fit cannot start where the box carries (numerically) no mass, since
