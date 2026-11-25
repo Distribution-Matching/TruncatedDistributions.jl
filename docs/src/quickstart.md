@@ -123,3 +123,12 @@ get_num_examples(2)                   # how many at that n
 ne = get_example(n = 2, index = 4)
 d  = dist_from_example(ne)
 ```
+
+The library includes standard examples from the literature:
+
+| Example | Source |
+| --- | --- |
+| 2.3, 3.4, 5.4 | Examples 1, 2, 3 of Manjunath and Wilhelm (2021) |
+| 2.5 | running example of Wilhelm and Manjunath (2010), `tmvtnorm` |
+| 3.3, 5.3, 8.3 | ``Φ_3^{ex}``, ``Φ_5^{ex}``, ``Φ_8^{ex}`` of Genz and Bretz (2009), §1.3 |
+| 3.5 | running example of the R package `MomTrunc` |

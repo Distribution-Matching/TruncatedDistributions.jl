@@ -7,8 +7,49 @@ follows [Julia-style semantic versioning](https://pkgdocs.julialang.org/v1/compa
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-25
+
+Versions 0.4.0 to 0.6.0 were not registered, so 0.7.0 is the first
+registered release since 0.3.0 and includes their changes, listed below.
+
+### Added
+
+- **`fit(TruncatedMvNormal, μ̂, Σ̂, a, b)` and `fit(TruncatedMvT, ν, μ̂, Σ̂, a, b)`**
+  return the fitted distribution; `fit_mvnormal` and `fit_mvt` still
+  return `(μ, Σ, info)` with diagnostics.
+- **Robust fitting.** Targets that no law on the box can have (a mean
+  outside the box, non-finite entries, a covariance that is not symmetric
+  positive definite) throw an `ArgumentError`, as does a user start at
+  which the box carries numerically no mass. If the warm start finds no
+  univariate solution on some axis, or puts no mass on the box, the fit
+  warns and starts from the naive point `(μ̂, Σ̂)`. `fit_mvnormal`,
+  `fit_mvt` and `fit` warn once when the loss target is not reached.
+  Linear-algebra failures and non-finite moments inside a loss or gradient
+  evaluation return a large finite penalty with zero gradient, so the line
+  search backs off.
+- `InfeasibleMomentsError` (from DistributionsFactories.jl) is re-exported.
+- **Literature examples** in the bundled library: 2.5 (Wilhelm and
+  Manjunath 2010), 3.4 and 5.4 (Manjunath and Wilhelm 2021, Examples 2
+  and 3), 3.5 (the `MomTrunc` documentation example), alongside 2.3
+  (Manjunath and Wilhelm 2021, Example 1) and the Genz–Bretz examples 3.3,
+  5.3 and 8.3.
+
 ### Changed
 
+- **Warm start via DistributionsFactories.jl 0.2.** `warm_start_diagonal`
+  and `warm_start_diagonal_t` solve each axis by
+  `truncated_locscale_params` (damped Newton on closed-form truncated
+  moments, about 1 µs per axis for the normal and 5 µs for the t) instead
+  of 1-D L-BFGS (normal) and Nelder–Mead on the recursion (t). The target
+  correlations are kept. This fixes the normal warm start silently
+  returning the naive start on semi-infinite axes. Infeasible axes throw
+  `InfeasibleMomentsError`.
+- **Default base case is `:mvnormalcdf`** (quasi-Monte-Carlo), falling
+  back to `:hcubature` for non-`Float64` parameters.
+- **Faster recursion on semi-infinite boxes.** Face terms whose weight is
+  zero (an infinite bound) are skipped, so their sub-recursions are not
+  evaluated; results are unchanged. For example 3.3 the normal recursion
+  drops from 16 to 7 states and the `t_7` one from 39 to 15.
 - **Default `gamma` is now `1`** (was `0.2`) for `fit_mvnormal`, `fit_mvt`
   and the global `set_loss_gamma!` setting, so mean and covariance entries
   are weighted equally by default, matching the benchmarks of the paper.

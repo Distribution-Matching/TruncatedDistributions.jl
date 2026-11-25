@@ -257,13 +257,16 @@ both from one Kan–Robotti-type recursion tree. The loss and the meaning of
 matching equations are not likelihood equations here.
 
 On a box that is unbounded in some coordinate, `ν > 2` is required (the
-covariance must exist).
+covariance must exist). Invalid targets throw an `ArgumentError`, as
+for [`fit_mvnormal`](@ref).
 
 # Keyword arguments
 
 * `μ_init`, `Σ_init` — starting point; default is the coordinate warm start
-  [`warm_start_diagonal_t`](@ref).
-* `ftarget`    — stop when the loss falls below this (default `1e-4`).
+  [`warm_start_diagonal_t`](@ref), or the naive point `(μ̂, Σ̂)`, with a
+  warning, if some axis has no univariate solution.
+* `ftarget`    — stop when the loss falls below this (default `1e-4`);
+  a warning is issued if the fit ends above it.
 * `gamma`      — covariance-term weight (default `1`).
 * `seed`       — seed the base-case RNG for a reproducible fit.
 * `time_limit` — seconds (default 60).

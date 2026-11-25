@@ -27,8 +27,14 @@ Two states are provided for the box-truncated MvNormal:
 The Kan-Robotti recursion expresses a `p`-th order primitive moment of a
 truncated multivariate normal in terms of `(p-1)`-th order moments of
 lower-dimensional conditional truncated normals at each box face. We
-build a children tree once at construction; each `(μ, Σ)` refresh walks
-the tree via [`update_distribution!`](@ref) so the topology is reused.
+build the recursion states once at construction. A state is determined
+by the set of coordinates fixed at faces and the faces they sit on, so
+states reached from different parents are shared, giving a directed
+acyclic graph rather than a tree. A child of an order-`L` state is
+needed only to order `L-1`, and a face term is skipped when its weight,
+the univariate density at that face, is zero (an infinite bound). Each
+`(μ, Σ)` refresh walks the graph via [`update_distribution!`](@ref), so
+the topology is reused.
 
 The base case of the recursion is the multivariate-normal box CDF.
 Switch backends with [`set_kr_base_backend!`](@ref):
@@ -53,7 +59,9 @@ and the face terms from the conditional laws of ``H`` on each face, which
 are again Student-t (``\nu - 1`` degrees of freedom). Each node therefore
 owns a helper (order ``L-2``) and ``2n`` face children (order ``L-1``,
 dimension ``n-1``). A node whose helper would have ``\nu \le 0``
-falls back to direct cubature (bounded boxes only). The state is
+falls back to direct cubature (bounded boxes only). Under `:mvnormalcdf`
+the t box probabilities use QMC from dimension 3; 2-D boxes use cubature,
+which is faster and more accurate there. The state is
 `TruncatedDistributions.BoxTruncatedMvTRecursiveMomentsState`.
 
 The moment-matching gradient for the t uses the order-4 tree of

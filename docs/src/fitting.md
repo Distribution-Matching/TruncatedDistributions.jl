@@ -81,10 +81,41 @@ The `:bcd` path additionally takes `bcd_selection` (`:softmax` default),
 `bcd_accept_by` (`:marginal` default, or `:full` for monotone descent at
 small `n`), and `bcd_polish` (default `false`).
 
+## Targets that cannot be matched
+
+Not every target `(μ̂, Σ̂)` is the truncated mean and covariance of some
+normal (or Student-t) law on the box, and no general criterion is known that
+decides this in advance. The fit therefore checks what it can and otherwise
+fails in a predictable way:
+
+1. **Inputs incompatible with the box** throw an `ArgumentError`: a mean
+   with some `μ̂ᵢ` outside `(aᵢ, bᵢ)`, a `Σ̂` that is not symmetric positive
+   definite, non-finite entries, `aᵢ ≥ bᵢ`, mismatched dimensions, and for
+   the t `ν ≤ 0`, or `ν ≤ 2` on an unbounded box. A user-supplied start
+   (`μ_init`, `Σ_init`) at which the box carries numerically no mass is
+   rejected too.
+2. **An axis with no univariate fit.** The warm start solves each axis by
+   `DistributionsFactories.truncated_locscale_params`, which throws
+   `InfeasibleMomentsError` (re-exported) when no univariate law on
+   `[aᵢ, bᵢ]` has mean `μ̂ᵢ` and variance `Σ̂ᵢᵢ`. The fit catches it, warns,
+   and starts from the naive point `(μ̂, Σ̂)` instead. This suggests, but
+   does not prove, that the target is unattainable.
+3. **Loss target not reached.** If L-BFGS ends above `ftarget` (a positive
+   minimum, a local minimum, or an iteration or time cap), the fit warns
+   once and returns its best point; `info.loss` gives the final loss.
+4. **Unattainable but within tolerance.** When no minimiser exists the loss
+   can still fall below `ftarget` along a path on which `(μ, Σ)` drift away
+   (entries growing, or `Σ` approaching singular). No warning is issued; the
+   returned parameters move further out as `ftarget` is lowered.
+5. **Numerical breakdown.** Trial points at which the box carries
+   numerically no mass, or where a linear-algebra step fails, are given a
+   large finite penalty loss with zero gradient, so the line search backs
+   off. The returned law always has finite moments.
+
 ## Lower-level building blocks
 
 ```julia
-warm_start_diagonal(μ̂, Σ̂, a, b)   # coordinate-wise univariate warm start
+warm_start_diagonal(μ̂, Σ̂, a, b)   # per-axis univariate warm start; may throw InfeasibleMomentsError
 block_coord_descent(μ̂, Σ̂, a, b)   # underlying BCD (experimental); returns (μ, Σ, hist, picks)
 moment_loss(d, μ̂, Σ̂)              # scalar loss read off the cached moments
 ```
@@ -100,7 +131,8 @@ d = fit(TruncatedMvT, 5.0, μ̂, Σ̂, a, b)
 ```
 
 It runs warm-started joint LBFGS ([`warm_start_diagonal_t`](@ref) for the
-start) on the closed-form gradient. The gradient is assembled from the
+start) on the closed-form gradient, with the same input checks, fallbacks
+and warnings as `fit_mvnormal`. The gradient is assembled from the
 truncated ``t_\nu`` moments of order ``\le 2`` and the truncated
 ``t_{\nu+2}(\mu, \nu\Sigma/(\nu+2))`` moments of order ``\le 4``, both
 from one recursion tree. It takes the keywords `gamma`, `ftarget`, `seed`,

@@ -16,10 +16,16 @@ covariance relative to the mean, in every dimension: `gamma = 1` weights
 them equally, `gamma < 1` favours the mean (0.2 ⇒ mean 5× the
 covariance), `gamma > 1` favours the covariance. `L < ftarget` bounds
 the RMS mean error by `√(2 ftarget)` and the RMS covariance error by
-`√(2 ftarget / gamma)`. The coordinate
-warm-start does per-axis `(μ, log σ²)` rescaling, which is usually
-enough for targets at `O(1)` scale. For targets at very different
-scales, rescale the inputs yourself or watch issue #7.
+`√(2 ftarget / gamma)`. The warm start fits each axis separately by
+`DistributionsFactories.truncated_locscale_params` and keeps the target
+correlations. For targets at very different scales, consider rescaling
+the inputs.
+
+Invalid targets (a mean outside the box, a covariance that is not
+symmetric positive definite, non-finite entries) throw an
+`ArgumentError`. If an axis has no univariate fit, the fit warns and
+starts from `(μ̂, Σ̂)`; if the loss ends above `ftarget`, it warns and
+returns its best point.
 
 For a reproducible fit under the (randomised-QMC) `:mvnormalcdf` base
 case, pass `seed`: it installs a seeded `MersenneTwister` as the
@@ -78,7 +84,7 @@ full-dimension call.
 `(μ, Σ, info)`. The `info` NamedTuple has at least
 
 * `method`     - symbol actually used
-* `loss`       - final scalar loss `½‖μA − μ̂‖² + ½‖ΣA − Σ̂‖²_F`
+* `loss`       - final loss `½(1/n)‖μA − μ̂‖² + γ·½(1/n²)‖ΣA − Σ̂‖²_F`
 * `time`       - wall-clock seconds
 * `iterations` - outer iterations consumed
 

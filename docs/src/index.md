@@ -7,10 +7,11 @@ what is in [Distributions.jl](https://github.com/JuliaStats/Distributions.jl)
 Its main focus is the **box-truncated multivariate normal**: a first-class
 distribution object with `mean`, `cov`, `pdf`, `logpdf`, `rand`, plus
 arbitrary multivariate raw moments via the recursive moment formula of
-[Kan and Robotti (2017)](https://doi.org/10.1080/10618600.2017.1322092).
+[Kan and Robotti (2017)](https://doi.org/10.1080/10618600.2017.1322092),
+run with recursion states shared between the faces of the box.
 The **box-truncated multivariate Student-t** (`TruncatedMvT`) is supported
 on the same footing, with raw moments from a Student-t analogue of the
-recursion. A moment-matching parameter-fitting layer (`fit`, with
+recursion (after Galarza et al., 2021). A moment-matching parameter-fitting layer (`fit`, with
 `fit_mvnormal` and `fit_mvt` for diagnostics) sits on top.
 
 The type hierarchy (`TruncatedMvDistribution{D, R, S}`) is generic in the

@@ -12,7 +12,10 @@ Its main functionality is the **box-truncated multivariate normal** and,
 since 0.5.0, the **box-truncated multivariate Student-t**: distribution
 objects that expose the usual `mean`, `cov`, `pdf`, `rand`,
 plus arbitrary raw moments via the recursive moment formula of
-[Kan and Robotti (2017)](https://doi.org/10.1080/10618600.2017.1322092).
+[Kan and Robotti (2017)](https://doi.org/10.1080/10618600.2017.1322092)
+(and its Student-t analogue, after
+[Galarza et al. (2021)](https://doi.org/10.1007/s00184-020-00802-1)),
+run with recursion states shared between the faces of the box.
 On top of that sits an optional moment-matching parameter-fitting layer.
 The type hierarchy (`TruncatedMvDistribution{D, R, S}`) is generic in the
 underlying distribution `D`, the truncation region `R`, and the cached
@@ -50,9 +53,12 @@ a dynamic, ODE-based moment matcher — addressing problems that
   (or `fit_mvnormal(μ̂, Σ̂, a, b)`, which also returns diagnostics) recovers
   `(μ, Σ)` whose box-truncation has the requested moments, under a
   single per-entry covariance weight `γ` in an averaged loss (`gamma`,
-  default `1`, so the mean and covariance entries are weighted equally). Picks joint LBFGS +
-  warm-start for small problems and a hybrid block-coordinate solver for
-  larger ones.
+  default `1`, so the mean and covariance entries are weighted equally). Picks joint LBFGS on a
+  closed-form gradient, warm-started by per-axis univariate fits from
+  [DistributionsFactories.jl](https://github.com/Distribution-Matching/DistributionsFactories.jl),
+  for small problems and an experimental block-coordinate solver for
+  larger ones. Invalid targets are rejected, and fits that fall short of
+  the loss target warn (see *Targets that cannot be matched*).
 - Box-truncated multivariate Student-t, `TruncatedMvT(ν, μ, Σ, a, b)`,
   with raw moments from a Student-t analogue of the Kan–Robotti recursion
   and t box probabilities from Genz–Bretz QMC (via
@@ -102,12 +108,13 @@ rand(d, 100)          # 2 × 100 batch
 
 `TruncatedMvNormal` is the recommended type up to moderate dimension. It
 is an alias for `RecursiveMomentsBoxTruncatedMvNormal` — the longer name
-spells out what the cached state holds. Its constructor eagerly builds
-the full Kan–Robotti child tree, so it is not constructable much beyond
-`n ≈ 8`. For high dimension use `BasicBoxTruncatedMvNormal`, a
+spells out what the cached state holds. Its constructor builds the
+recursion's state graph, whose states are shared between faces and
+whose size still grows quickly with `n`, so it is practical up to about
+`n = 8`. For high dimension use `BasicBoxTruncatedMvNormal`, a
 no-recursion type that stores only `(μ, Σ)`: it integrates moments by
 direct cubature at small `n` and by Monte Carlo above `n = 6` (see
-[`mc_moments`](@ref) / `set_moment_mc!`), so `mean(d)` / `cov(d)` remain
+`mc_moments` / `set_moment_mc!`), so `mean(d)` / `cov(d)` remain
 cheap at `n = 20`.
 
 Both `Σ` and the box bounds can be supplied as plain `Vector` / `Matrix`;
@@ -256,6 +263,37 @@ The `:bcd` path also takes `bcd_selection` (`:softmax` default),
 small `n`), and `bcd_polish` (default `false`; a joint-LBFGS polish from
 the BCD endpoint).
 
+### Targets that cannot be matched
+
+Not every target `(μ̂, Σ̂)` is the truncated mean and covariance of some
+normal (or Student-t) law on the box, and no general criterion is known that
+decides this in advance. The fit therefore checks what it can and otherwise
+fails in a predictable way:
+
+1. **Inputs incompatible with the box** throw an `ArgumentError`: a mean
+   with some `μ̂ᵢ` outside `(aᵢ, bᵢ)`, a `Σ̂` that is not symmetric positive
+   definite, non-finite entries, `aᵢ ≥ bᵢ`, mismatched dimensions, and for
+   the t `ν ≤ 0`, or `ν ≤ 2` on an unbounded box. A user-supplied start
+   (`μ_init`, `Σ_init`) at which the box carries numerically no mass is
+   rejected too.
+2. **An axis with no univariate fit.** The warm start solves each axis by
+   `DistributionsFactories.truncated_locscale_params`, which throws
+   `InfeasibleMomentsError` (re-exported) when no univariate law on
+   `[aᵢ, bᵢ]` has mean `μ̂ᵢ` and variance `Σ̂ᵢᵢ`. The fit catches it, warns,
+   and starts from the naive point `(μ̂, Σ̂)` instead. This suggests, but
+   does not prove, that the target is unattainable.
+3. **Loss target not reached.** If L-BFGS ends above `ftarget` (a positive
+   minimum, a local minimum, or an iteration or time cap), the fit warns
+   once and returns its best point; `info.loss` gives the final loss.
+4. **Unattainable but within tolerance.** When no minimiser exists the loss
+   can still fall below `ftarget` along a path on which `(μ, Σ)` drift away
+   (entries growing, or `Σ` approaching singular). No warning is issued; the
+   returned parameters move further out as `ftarget` is lowered.
+5. **Numerical breakdown.** Trial points at which the box carries
+   numerically no mass, or where a linear-algebra step fails, are given a
+   large finite penalty loss with zero gradient, so the line search backs
+   off. The returned law always has finite moments.
+
 ### Why two algorithms
 
 > **Experimental.** The `:bcd` method (hybrid block coordinate descent,
@@ -277,7 +315,7 @@ correcting joint correlation structure.
 ### Lower-level fitting API
 
 ```julia
-warm_start_diagonal(μ̂, Σ̂, a, b)   # coordinate-wise univariate warm start
+warm_start_diagonal(μ̂, Σ̂, a, b)   # per-axis univariate warm start; may throw InfeasibleMomentsError
 block_coord_descent(μ̂, Σ̂, a, b)   # underlying BCD (experimental); returns (μ, Σ, hist, picks)
 moment_loss(d, μ̂, Σ̂)              # γ-weighted scalar loss off the cached moments
 set_loss_gamma!(1.0)              # set the covariance weight γ globally
@@ -369,6 +407,15 @@ ne = get_example(n = 2, index = 4)  # the example as a NormalExample
 d  = dist_from_example(ne)          # built as a RecursiveMomentsBoxTruncatedMvNormal
 ```
 
+The library includes standard examples from the literature:
+
+| Example | Source |
+| --- | --- |
+| 2.3, 3.4, 5.4 | Examples 1, 2, 3 of Manjunath and Wilhelm (2021) |
+| 2.5 | running example of Wilhelm and Manjunath (2010), `tmvtnorm` |
+| 3.3, 5.3, 8.3 | Φ₃ᵉˣ, Φ₅ᵉˣ, Φ₈ᵉˣ of Genz and Bretz (2009), §1.3 |
+| 3.5 | running example of the R package `MomTrunc` |
+
 ## Tests
 
 ```julia
@@ -380,7 +427,8 @@ recursion cross-checked against direct cubature, gradient correctness
 (including the γ weighting), Monte-Carlo moments against the recursion,
 seeded reproducibility, the `fit_mvnormal` end-to-end recovery, the
 truncated-t recursion against cubature, the truncated-t gradient against
-finite differences, and `fit_mvt` parameter recovery.
+finite differences, `fit_mvt` parameter recovery, and the behaviour of
+the fit on invalid, infeasible and unattainable targets.
 
 Long-running benchmark scripts for the companion paper live in a
 separate repository:
@@ -394,11 +442,21 @@ separate repository:
   https://doi.org/10.1080/10618600.2017.1322092
 - Genz, A. and Bretz, F. (2009). *Computation of Multivariate Normal and
   t Probabilities*. Lecture Notes in Statistics 195, Springer. (Algorithm
-  used by the optional `:mvnormalcdf` backend.)
+  used by the default `:mvnormalcdf` backend.)
 - Genz, A. and Bretz, F. (2002). "Comparison of methods for the
   computation of multivariate t probabilities." *Journal of Computational
   and Graphical Statistics*, 11(4), 950–971. (Algorithm behind the t box
   probabilities.)
+- Galarza, C. E., Lin, T.-I., Wang, W.-L. and Lachos, V. H. (2021). "On
+  moments of folded and truncated multivariate Student-t distributions
+  based on recurrence relations." *Metrika*, 84(7), 825–850.
+  https://doi.org/10.1007/s00184-020-00802-1
+- Manjunath, B. G. and Wilhelm, S. (2021). "Moments calculation for the
+  doubly truncated multivariate normal density." *Journal of Behavioral
+  Data Science*, 1(1), 17–33. https://doi.org/10.35566/jbds/v1n1/p2
+- Wilhelm, S. and Manjunath, B. G. (2010). "tmvtnorm: A package for the
+  truncated multivariate normal distribution." *The R Journal*, 2(1),
+  25–29.
 - The fitting algorithms and the truncated-t gradient are described in the
   companion paper *Moment Matching of Box-Truncated Elliptical Distributions, with
   Efficient Implementation for the Multivariate Normal and Student-t* (Carrizo Molina & Nazarathy).
